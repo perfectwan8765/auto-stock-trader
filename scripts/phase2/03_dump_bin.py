@@ -18,7 +18,7 @@ import sys
 
 from _common import DATA_NORM, DUMP_BIN, QLIB_DIR, log
 
-INCLUDE_FIELDS = "open,high,low,close,volume,factor"
+INCLUDE_FIELDS = "open,high,low,close,vwap,volume,factor"
 
 
 def main() -> None:

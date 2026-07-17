@@ -42,6 +42,8 @@ factor 재계산·달력 드리프트 위험을 없애려 `dump_update`(증분 a
 - 첫 유효 close로 정규화 → `$close` 첫날 ≈ 1.0.
 - **원가(체결가) 복원**: `raw_price = $close / $factor` (백테스트 실제 거래가에 사용).
 - `volume<=0`/NaN 행은 전 컬럼 NaN → **결측 유지(ffill 금지)**, lookahead 방지.
+- **`$vwap` 프록시** = 조정·정규화된 `(H+L+C)/3`. Alpha158이 `$vwap`을 참조하는데
+  yfinance가 미제공 → 표준 프록시로 합성(당일값이라 lookahead 없음). 아래 한계 참조.
 
 ## ⚠️ 한계 (백테스트 해석 시 반드시 반영)
 
@@ -53,7 +55,9 @@ factor 재계산·달력 드리프트 위험을 없애려 `dump_update`(증분 a
 - **yfinance 취약성(개선9)**: 비공식 스크래퍼라 간헐 차단·스키마 변경 가능.
   수집기에 재시도·backoff·직전 정상 CSV 폴백을 두었으나, 지속 실패 시
   토스 candle API 폴백은 추후 검토.
-- **vwap 없음**: yfinance는 vwap 미제공. Alpha158은 OHLCV+factor로 동작(vwap 불요).
+- **vwap 프록시**: Alpha158은 `$vwap`을 참조(feature `$vwap/$close` 등, 전체 158개 중 1~2개).
+  yfinance는 실제 vwap 미제공 → `(H+L+C)/3`(전형적 프록시)로 합성. 실제 거래량가중가와
+  다르므로 vwap 기반 feature는 근사. 영향 범위 작음(feature 1~2개).
 
 ## 산출물
 

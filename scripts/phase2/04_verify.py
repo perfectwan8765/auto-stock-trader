@@ -18,7 +18,7 @@ from qlib.data import D
 
 from _common import QLIB_DIR, log, read_universe
 
-FIELDS = ["$open", "$high", "$low", "$close", "$volume", "$factor"]
+FIELDS = ["$open", "$high", "$low", "$close", "$vwap", "$volume", "$factor"]
 
 
 def main() -> None:
