@@ -1,0 +1,28 @@
+# secrets — 절대 커밋 금지
+.env
+.env.local
+*.pem
+*.key
+
+# 토큰/캐시 (자격증명 파생물)
+.cache/
+.toss_token.json
+
+# Phase 0 실측 결과(계좌식별자 등 민감정보 포함 가능) — 필요 시 수동으로 커밋
+phase0-findings.md
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+# .python-version 은 재현성 설정이므로 커밋한다 (gitignore 하지 않음)
+
+# qlib 데이터/산출물
+data/
+mlruns/
+*.bin
+
+# OS/IDE
+.DS_Store
+.vscode/

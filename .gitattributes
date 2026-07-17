@@ -1,0 +1,9 @@
+# 텍스트 파일 줄바꿈 정규화 (커밋은 LF로 저장)
+* text=auto eol=lf
+
+# 바이너리 명시 (diff/줄바꿈 처리 방지)
+*.bin binary
+*.png binary
+*.jpg binary
+*.parquet binary
+*.pkl binary

@@ -1,0 +1,18 @@
+# Phase 1 개발환경 (M1 + pyenv 3.10.13, .venv)
+# 설치 순서가 중요: 선행 핀 → pyqlib → xgboost
+# 사전: brew install libomp  (LightGBM OpenMP 런타임 의존성)
+
+# --- 선행 핀 (Qlib 호환: numpy<2, pandas<2.2, cython<3) ---
+numpy==1.26.4
+cython==0.29.37
+pandas==2.1.4
+
+# --- Qlib 스택 ---
+pyqlib==0.9.7
+lightgbm==4.6.0
+xgboost==3.2.0
+scikit-learn==1.7.2
+
+# --- 토스 어댑터(Phase 0·5) ---
+requests>=2.31,<3
+python-dotenv>=1.0,<2
