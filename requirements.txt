@@ -16,3 +16,11 @@ scikit-learn==1.7.2
 # --- 토스 어댑터(Phase 0·5) ---
 requests>=2.31,<3
 python-dotenv>=1.0,<2
+
+# --- 데이터 파이프라인(Phase 2) ---
+# yfinance: S&P500 일봉 수집 (비공식 스크래퍼 — 개선9 재시도·폴백 필요)
+yfinance==1.5.1
+# vendor/dump_bin.py 직접 의존 (pyqlib 딸림이지만 명시 핀)
+fire==0.7.1
+loguru==0.7.3
+tqdm==4.68.4

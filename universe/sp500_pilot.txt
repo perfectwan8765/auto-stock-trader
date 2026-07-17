@@ -1,0 +1,44 @@
+# S&P500 파일럿 유니버스 (Phase 2). 현재구성 고정 — point-in-time 편향은 scripts/phase2/README.md 한계 참조.
+# 한 줄당 티커 1개. '#'·빈 줄 무시. yfinance 심볼 규칙(클래스주는 BRK-B 식 '-').
+# 섹터 분산 대형주 ~40. 전 종목 2015년 이전 상장 → 10년 히스토리 확보 가능.
+AAPL
+MSFT
+NVDA
+AVGO
+ORCL
+CRM
+ADBE
+CSCO
+AMD
+INTC
+GOOGL
+META
+NFLX
+DIS
+T
+VZ
+AMZN
+TSLA
+HD
+MCD
+NKE
+SBUX
+WMT
+PG
+KO
+PEP
+COST
+UNH
+JNJ
+LLY
+ABBV
+MRK
+PFE
+JPM
+BAC
+V
+MA
+XOM
+CVX
+CAT
+NEE

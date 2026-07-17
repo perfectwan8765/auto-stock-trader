@@ -187,6 +187,8 @@
 - **[개선4] 안전장치:** `--dry-run`(주문 대신 발주계획 로그만) · 파일/env 기반 **kill switch**(존재 시 즉시 중단) · **서킷브레이커**(일일 주문건수·손실 상한 초과 시 정지)
 - **market-calendar/US로 정규장 확인 후** 발주
 - Rate limit 준수(호출 간 sleep), 에러코드별 처리(잔액부족·장마감·rate-limit)
+- **[개선10] 라이브러리 예외화:** `src/toss/`는 설정/계좌/토큰 오류를 `SystemExit` 대신 `TossError` 계열(`TossConfigError`·`TossAuthError`, `TossApiError`도 편입)로 던진다. `SystemExit` 종료 변환은 CLI(phase0 러너)에서만 → cron 자동화가 서킷브레이커·kill switch·부분 이월로 잡을 수 있음. (code-review 2026-07-17 지적, phase0 probe엔 무해라 Phase 5로 이월)
+- **[개선11] invalid-token 재시도:** `TossClient.request()`가 401 응답 시 `get_token(force_refresh=True)` 후 **1회만** 재시도(`_retry` 플래그로 상한). 401은 미처리 거부라 POST /orders 재시도도 안전(clientOrderId 멱등키 이중안전망).
 - **에지케이스:** 정규장 외 호출·부분체결·잔액부족·네트워크 재시도·환전 미완·크래시 중 부분 리밸런싱
 - **검증:** 각 함수 단위 테스트 (mock 응답) — dry-run 발주계획·멱등키 재현·최소금액 스킵·자금부족 이월 케이스 포함
 - 커밋: `feat(broker): 토스 OpenAPI 리밸런싱 어댑터`
