@@ -1,0 +1,115 @@
+# Phase 3 ① — Alpha158 + LightGBM 배선 스모크 (41종목 파일럿)
+#
+# 목적: config가 돌아가나 / Alpha158 지표가 계산되나 / 백테스트가 주간 스텝으로 도나만 확인.
+# 41종목은 K=20이면 유니버스의 ~49% 보유 → 횡단 랭킹 무의미. 여기 지표로 전략 우열 판단 금지(B3).
+# 실제 엣지 판독은 ② S&P500 전체(~500) 확장에서.
+#
+# grilling 결정(2026-07-17) 반영:
+#   B2: 라벨을 주간 5거래일 fwd로 override + 백테스트 주간 스텝(time_per_step: week)
+#   비용: 개선2 placeholder(수수료 0.10% + 환전 0.20% + 슬리피지 0.10% = 편도 0.40%)
+#   회전율: TopkDropout n_drop 제어(개선7, no-trade band 없음)
+#   벤치마크: null (SPY 대비는 ② 확장 단계)
+
+qlib_init:
+  provider_uri: data/qlib_us
+  region: us
+
+market: all
+benchmark: null
+
+# ⚠️ B2 overlapping 한계: 일간 샘플 + 5일 fwd 라벨 → valid IC 자기상관 오염(파일럿 허용).
+#    엄밀판(주간 비겹침 샘플링)은 유니버스 확장 후.
+data_handler_config: &data_handler_config
+  start_time: 2015-01-02
+  end_time: 2026-07-16
+  fit_start_time: 2015-01-02   # 정규화 통계는 train 구간만 (valid/test 누설 방지)
+  fit_end_time: 2021-06-30
+  instruments: all
+  # B2: Alpha158 기본 라벨(익일 Ref($close,-2)/Ref($close,-1)-1)을 주간 5거래일 fwd로 override.
+  label: [["Ref($close, -6)/Ref($close, -1) - 1"], ["LABEL0"]]
+  infer_processors:
+    - class: RobustZScoreNorm
+      kwargs: {fields_group: feature, clip_outlier: true}
+    - class: Fillna
+      kwargs: {fields_group: feature}
+  learn_processors:
+    - class: DropnaLabel
+    - class: CSRankNorm
+      kwargs: {fields_group: label}
+
+port_analysis_config: &port_analysis_config
+  executor:
+    class: SimulatorExecutor
+    module_path: qlib.backtest.executor
+    kwargs:
+      time_per_step: week          # B2: 주간 리밸런싱 스텝
+      generate_portfolio_metrics: true
+  strategy:
+    class: TopkDropoutStrategy
+    module_path: qlib.contrib.strategy
+    kwargs:
+      signal: <PRED>
+      topk: 20                     # K=15~20 (41종목선 배선용, 랭킹 무의미)
+      n_drop: 5                    # 회전율 제어(개선7)
+  backtest:
+    start_time: 2023-01-01
+    # end_time에 버퍼(달력 끝-2주): TopkDropout이 최종 스텝의 다음 거래일을 참조하므로
+    # 데이터 마지막일(2026-07-16)까지 돌리면 calendar_index+1 오버플로.
+    end_time: 2026-06-30
+    account: 700                   # 실규모 미러 ($700). granularity/최소주문 미반영은 한계(낙관 편향)
+    # benchmark: 41종목 등가중을 러너(run_smoke.py)가 주입. SPY 대비는 ② 확장 단계(B3).
+    # (qlib은 benchmark=None을 CSI300으로 폴백시켜 실데이터 벤치가 필요)
+    benchmark: null
+    exchange_kwargs:
+      deal_price: close
+      # 개선2 placeholder 비용을 편도 코스트로 접기: 수수료0.10%+환전0.20%+슬리피지0.10%=0.40%
+      # ⚠️ 실측 아님. Phase 0 GET /commissions + 환율 실측으로 반드시 교체.
+      open_cost: 0.004
+      close_cost: 0.004
+      min_cost: 0                  # 소수점(fractional) → 최소 수수료 없음
+      trade_unit: null             # 소수점 매수 → 라운드랏 없음
+
+task:
+  model:
+    class: LGBModel
+    module_path: qlib.contrib.model.gbdt
+    kwargs:
+      loss: mse
+      colsample_bytree: 0.8879
+      learning_rate: 0.0421
+      subsample: 0.8789
+      lambda_l1: 205.6999
+      lambda_l2: 580.9768
+      max_depth: 8
+      num_leaves: 210
+      num_threads: 8
+      seed: 2026                   # 시드 고정(재현성)
+      early_stopping_rounds: 50    # valid로 early-stop
+      num_boost_round: 1000
+  dataset:
+    class: DatasetH
+    module_path: qlib.data.dataset
+    kwargs:
+      handler:
+        class: Alpha158
+        module_path: qlib.contrib.data.handler
+        kwargs: *data_handler_config
+      segments:
+        train: [2015-01-02, 2021-06-30]   # ~56%
+        valid: [2021-07-01, 2022-12-31]   # ~13% (early-stop)
+        test:  [2023-01-01, 2026-07-16]   # ~30% (1회만 관측)
+  record:
+    - class: SignalRecord
+      module_path: qlib.workflow.record_temp
+      kwargs:
+        model: <MODEL>
+        dataset: <DATASET>
+    - class: SigAnaRecord
+      module_path: qlib.workflow.record_temp
+      kwargs:
+        ana_long_short: false
+        ann_scaler: 52             # 주간 → 연 52주
+    - class: PortAnaRecord
+      module_path: qlib.workflow.record_temp
+      kwargs:
+        config: *port_analysis_config
