@@ -4,11 +4,13 @@ data/ 아래 산출물은 .gitignore(재생성 가능). universe/는 커밋.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-UNIVERSE_FILE = ROOT / "universe" / "sp500_pilot.txt"
+# ② 확장: 기본 유니버스 = S&P500 전체(+SPY). pilot(41) 재현은 QLIB_UNIVERSE=sp500_pilot.txt로.
+UNIVERSE_FILE = ROOT / "universe" / os.environ.get("QLIB_UNIVERSE", "sp500_full.txt")
 DATA_RAW = ROOT / "data" / "raw"          # yfinance 원본 CSV
 DATA_NORM = ROOT / "data" / "normalized"  # 정규화 CSV (dump_bin 입력)
 QLIB_DIR = ROOT / "data" / "qlib_us"      # 최종 .bin (provider_uri)
