@@ -1,6 +1,6 @@
 """Phase 0-2 검증(holdings 200) + Phase 0-6(T+N 결제주기 관찰).
 
-용도 1) 계좌 헤더 검증:  python scripts/phase0/05_holdings_settlement.py
+용도 1) 계좌 헤더 검증:  python scripts/toss_probe/05_holdings_settlement.py
 용도 2) 결제주기 관찰:   소액 매도 직후 이 스크립트를 날짜별로 반복 실행하며
         buying-power(USD 가용액) 반영 시점을 기록 → 매도대금이 며칠 뒤 매수가능해지는지(T+N) 확인.
 """

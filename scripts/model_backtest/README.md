@@ -12,9 +12,9 @@ grilling 결정(2026-07-17, [../../qlib-toss.md](../../qlib-toss.md) Phase 3)의
 
 ```bash
 # ① 배선 스모크 (41종목). QLIB_UNIVERSE 미설정 시 data/qlib_us는 ② 전체가 덮어씀 주의.
-.venv/bin/python scripts/phase3/run_smoke.py --config workflow_config_alpha158_lgb_pilot.yaml
+.venv/bin/python scripts/model_backtest/run_smoke.py --config workflow_config_alpha158_lgb_pilot.yaml
 # ② 엣지 판독 (S&P500 500종목, SPY 벤치)
-.venv/bin/python scripts/phase3/run_smoke.py --config workflow_config_alpha158_lgb_sp500.yaml
+.venv/bin/python scripts/model_backtest/run_smoke.py --config workflow_config_alpha158_lgb_sp500.yaml
 ```
 
 러너는 config 구동. `--config`의 handler `instruments`가 `sp500`이면 `instruments/sp500.txt`

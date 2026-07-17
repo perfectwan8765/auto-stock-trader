@@ -6,7 +6,7 @@
   3) instruments 수가 유니버스와 대체로 일치
   4) 샘플 종목 $close/$factor 등 최근 구간 로드 → 비어있지 않고 전부 NaN 아님
 
-실행:  .venv/bin/python scripts/phase2/04_verify.py
+실행:  .venv/bin/python scripts/data_pipeline/04_verify.py
 """
 from __future__ import annotations
 

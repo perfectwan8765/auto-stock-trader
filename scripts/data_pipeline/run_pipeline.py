@@ -3,7 +3,7 @@
 증분갱신 = 이 스크립트 재실행. 41종목 전체 재빌드도 1~2분이라 dump_update(증분)
 대신 매번 전체 재빌드로 멱등·안전하게 간다(factor 재계산·달력 드리프트 위험 제거).
 
-실행:  .venv/bin/python scripts/phase2/run_pipeline.py
+실행:  .venv/bin/python scripts/data_pipeline/run_pipeline.py
 옵션:  --symbols AAPL MSFT (부분)   --skip-collect(이미 받은 raw로 재빌드만)
 """
 from __future__ import annotations

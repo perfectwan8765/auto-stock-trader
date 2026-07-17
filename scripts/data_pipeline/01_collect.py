@@ -8,7 +8,7 @@
 auto_adjust=False 로 raw close와 adjclose를 함께 받는다(정규화에서 factor 계산에 필요).
 결측/거래정지일은 여기서 채우지 않는다(ffill 금지) — 정규화·dump 단계에서 NaN 유지.
 
-실행:  .venv/bin/python scripts/phase2/01_collect.py
+실행:  .venv/bin/python scripts/data_pipeline/01_collect.py
 옵션:  --symbols AAPL MSFT (부분 수집)  --start 2015-01-01
 """
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """Phase 0-2: 계좌 목록 조회 → X-Tossinvest-Account 값 확보.
 
-실행:  python scripts/phase0/01_accounts.py
+실행:  python scripts/toss_probe/01_accounts.py
 결과:  응답에서 계좌식별자를 찾아 .env의 TOSS_ACCOUNT에 채운다.
 검증:  이후 holdings 200 반환 (05_holdings.py)
 """

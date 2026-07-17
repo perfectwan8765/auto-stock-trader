@@ -8,7 +8,7 @@
 # 이미 .venv(3.10.13)가 만들어져 있고 requests/python-dotenv가 설치됨.
 cp .env.example .env          # 그리고 .env에 발급받은 키를 채운다
 ```
-스크립트는 항상 프로젝트 루트에서 `.venv/bin/python scripts/phase0/XX.py` 로 실행.
+스크립트는 항상 프로젝트 루트에서 `.venv/bin/python scripts/toss_probe/XX.py` 로 실행.
 
 ## 0-1. 키 발급 (수동)
 1. 토스 앱에서 토스증권 계좌 개설(비대면)
@@ -32,9 +32,9 @@ cp .env.example .env          # 그리고 .env에 발급받은 키를 채운다
 - 최소금액 실측이면 `--amount 1` 처럼 아주 작게.
 ```bash
 # 1) 계획만 확인(안전)
-.venv/bin/python scripts/phase0/04_place_test_order.py --symbol AAPL --amount 1
+.venv/bin/python scripts/toss_probe/04_place_test_order.py --symbol AAPL --amount 1
 # 2) 정규장 시간에 실제 발주
-.venv/bin/python scripts/phase0/04_place_test_order.py --symbol AAPL --amount 1 --confirm
+.venv/bin/python scripts/toss_probe/04_place_test_order.py --symbol AAPL --amount 1 --confirm
 ```
 에러코드 판독은 스크립트 출력 안내 및 `qlib-toss.md` §1 참고.
 

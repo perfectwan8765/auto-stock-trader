@@ -7,7 +7,7 @@
   ① 배선 스모크:  --config workflow_config_alpha158_lgb_pilot.yaml  (41종목, 지표=배선용)
   ② 엣지 판독:    --config workflow_config_alpha158_lgb_sp500.yaml  (S&P500 전체, SPY 벤치)
 
-실행:  .venv/bin/python scripts/phase3/run_smoke.py [--config <yaml>]
+실행:  .venv/bin/python scripts/model_backtest/run_smoke.py [--config <yaml>]
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def _ensure_tradable_instruments(provider_uri: Path, market: str, benchmark: str
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default=DEFAULT_CONFIG, help="phase3 디렉토리 내 workflow config 파일명(또는 경로)")
+    ap.add_argument("--config", default=DEFAULT_CONFIG, help="model_backtest 디렉토리 내 workflow config 파일명(또는 경로)")
     args = ap.parse_args()
 
     cfg_path = Path(args.config)
@@ -93,7 +93,7 @@ def main() -> None:
     dataset: DatasetH = init_instance_by_config(cfg["task"]["dataset"])
     model = init_instance_by_config(cfg["task"]["model"])
 
-    exp_name = f"phase3_{cfg_path.stem}"
+    exp_name = cfg_path.stem
     with R.start(experiment_name=exp_name):
         print("\n🔧 학습 시작 (valid early-stop, seed 고정)")
         model.fit(dataset)  # R.log_metrics가 활성 recorder에 기록되도록 컨텍스트 안에서 학습

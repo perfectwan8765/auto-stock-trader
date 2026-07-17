@@ -1,7 +1,7 @@
 """Phase 0-3(문서/API 확인 부분): 대상 종목의 시장·통화·상장상태 조회 +
 미국 장운영시간(market-calendar) 확인.
 
-실행:  python scripts/phase0/02_stock_info.py AAPL MSFT NVDA
+실행:  python scripts/toss_probe/02_stock_info.py AAPL MSFT NVDA
 전제:  .env에 TOSS_ACCOUNT 설정 (계좌 헤더 필요할 수 있음)
 용도:  소수점 매수 실측(04_place_test_order.py) 전에 종목 자체가 US/거래가능인지 확인.
 """

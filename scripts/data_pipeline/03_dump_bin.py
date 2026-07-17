@@ -6,7 +6,7 @@
 
 산출물: data/qlib_us/{calendars,instruments,features}
 
-실행:  .venv/bin/python scripts/phase2/03_dump_bin.py
+실행:  .venv/bin/python scripts/data_pipeline/03_dump_bin.py
 옵션:  --mode all|update   --no-clean(all에서 기존 삭제 안 함)
 """
 from __future__ import annotations

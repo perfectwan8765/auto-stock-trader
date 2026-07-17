@@ -30,9 +30,9 @@ python -m venv .venv                        # pyenv 3.10.13 기준
 ## 진행 상태
 
 - [x] **Phase 1** 개발 환경 구축 (M1 + pyenv, qlib/lightgbm/xgboost)
-- [ ] **Phase 0** 토스 실측 (키 승인 대기 중) — `scripts/phase0/` 참고
-- [x] **Phase 2** 데이터 파이프라인 (S&P500 파일럿 41종목 → Qlib bin) — `scripts/phase2/` 참고
-- [ ] **Phase 3** 모델 학습 + 백테스트
+- [ ] **Phase 0** 토스 실측 (키 승인 대기 중) — `scripts/toss_probe/` 참고
+- [x] **Phase 2** 데이터 파이프라인 (S&P500 전체 503+SPY → Qlib bin) — `scripts/data_pipeline/` 참고
+- [x] **Phase 3** 모델 학습 + 백테스트 (①배선 ②S&P500 판독) — `scripts/model_backtest/` 참고
 - [ ] **Phase 4** 시그널 생성
 - [ ] **Phase 5** 토스 발주 어댑터
 - [ ] **Phase 6~7** 스모크 테스트 + 소액 실전
@@ -41,9 +41,10 @@ python -m venv .venv                        # pyenv 3.10.13 기준
 
 ```
 src/toss/          토스 OpenAPI 공통 모듈 (config·auth·client) — Phase 0/5 공용
-scripts/phase0/    Phase 0 실측 툴킷 (키 발급 후 순서대로 실행)
-scripts/phase2/    Phase 2 데이터 파이프라인 (수집→정규화→dump→검증)
-universe/          유니버스 티커 리스트 (S&P500 파일럿)
+scripts/toss_probe/       Phase 0 실측 툴킷 (키 발급 후 순서대로 실행)
+scripts/data_pipeline/    Phase 2 데이터 파이프라인 (수집→정규화→dump→검증)
+scripts/model_backtest/   Phase 3 Alpha158+LGBM 학습·백테스트 (config 구동)
+universe/          유니버스 티커 리스트 (S&P500 전체 + 파일럿)
 vendor/            외부 원본 파일 (qlib dump_bin.py) — 수정 금지
 qlib-toss.md       전체 작업계획서
 requirements.txt   의존성 핀 (재현용)

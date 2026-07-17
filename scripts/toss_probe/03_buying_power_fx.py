@@ -1,6 +1,6 @@
 """Phase 0-5: 매수가능금액(KRW/USD) + 환율 조회 → 자동환전 여부 판단.
 
-실행:  python scripts/phase0/03_buying_power_fx.py
+실행:  python scripts/toss_probe/03_buying_power_fx.py
 판단:  buying-power가 USD 매수가능금액을 반환하면 통합증거금(자동환전) 가능성.
        USD가 0/미노출이면 선환전 필요 → 발주 전 환전 로직 필요.
 """
