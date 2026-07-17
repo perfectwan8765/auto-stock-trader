@@ -202,6 +202,7 @@
 - Rate limit 준수(호출 간 sleep), 에러코드별 처리(잔액부족·장마감·rate-limit)
 - **[개선10] 라이브러리 예외화:** `src/toss/`는 설정/계좌/토큰 오류를 `SystemExit` 대신 `TossError` 계열(`TossConfigError`·`TossAuthError`, `TossApiError`도 편입)로 던진다. `SystemExit` 종료 변환은 CLI(phase0 러너)에서만 → cron 자동화가 서킷브레이커·kill switch·부분 이월로 잡을 수 있음. (code-review 2026-07-17 지적, phase0 probe엔 무해라 Phase 5로 이월)
 - **[개선11] invalid-token 재시도:** `TossClient.request()`가 401 응답 시 `get_token(force_refresh=True)` 후 **1회만** 재시도(`_retry` 플래그로 상한). 401은 미처리 거부라 POST /orders 재시도도 안전(clientOrderId 멱등키 이중안전망).
+- **[개선13] OAuth 응답바디 로깅 누설:** `src/toss/auth.py:76`이 토큰 발급 실패 시 `resp.text`(OAuth 서버 응답 전체)를 에러메시지에 노출 → 민감정보 누설 가능. **status code만 로깅하고 body는 redact**. 개선10 예외화(`TossAuthError`) 작업 시 함께 처리. (code-review 2026-07-17 발견, Phase 5로 이월)
 - **에지케이스:** 정규장 외 호출·부분체결·잔액부족·네트워크 재시도·환전 미완·크래시 중 부분 리밸런싱
 - **검증:** 각 함수 단위 테스트 (mock 응답) — dry-run 발주계획·멱등키 재현·최소금액 스킵·자금부족 이월 케이스 포함
 - 커밋: `feat(broker): 토스 OpenAPI 리밸런싱 어댑터`
