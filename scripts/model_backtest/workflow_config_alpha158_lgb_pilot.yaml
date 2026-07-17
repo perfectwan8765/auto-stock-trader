@@ -57,7 +57,7 @@ port_analysis_config: &port_analysis_config
     # 데이터 마지막일(2026-07-16)까지 돌리면 calendar_index+1 오버플로.
     end_time: 2026-06-30
     account: 700                   # 실규모 미러 ($700). granularity/최소주문 미반영은 한계(낙관 편향)
-    # benchmark: 41종목 등가중을 러너(run_smoke.py)가 주입. SPY 대비는 ② 확장 단계(B3).
+    # benchmark: 41종목 등가중을 러너(run_backtest.py)가 주입. SPY 대비는 ② 확장 단계(B3).
     # (qlib은 benchmark=None을 CSI300으로 폴백시켜 실데이터 벤치가 필요)
     benchmark: null
     exchange_kwargs:

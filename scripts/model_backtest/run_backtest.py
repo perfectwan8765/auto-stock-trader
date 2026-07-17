@@ -7,7 +7,7 @@
   ① 배선 스모크:  --config workflow_config_alpha158_lgb_pilot.yaml  (41종목, 지표=배선용)
   ② 엣지 판독:    --config workflow_config_alpha158_lgb_sp500.yaml  (S&P500 전체, SPY 벤치)
 
-실행:  .venv/bin/python scripts/model_backtest/run_smoke.py [--config <yaml>]
+실행:  .venv/bin/python scripts/model_backtest/run_backtest.py [--config <yaml>]
 """
 from __future__ import annotations
 

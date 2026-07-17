@@ -4,7 +4,7 @@
 # 이제 횡단 랭킹이 유의미 → IC/RankIC/IR로 실제 엣지 판독. Sharpe 4+면 과최적 의심.
 #
 # grilling 결정(B3): 유니버스 sp500(SPY 제외, 매매 전용), 벤치마크 = SPY.
-#   - instruments/sp500.txt = all.txt(전체+SPY) - SPY. 러너(run_smoke.py)가 생성.
+#   - instruments/sp500.txt = all.txt(전체+SPY) - SPY. 러너(run_backtest.py)가 생성.
 #   - SPY는 features에는 있으나 매매 유니버스에서 제외 → 벤치 전용.
 # 한계: 생존편향/point-in-time(개선3) — 현 S&P500 구성 고정, 과거 시점 구성 아님.
 #       overlapping 라벨(B2) — 일간샘플+5일fwd. 비용은 개선2 placeholder(Phase 0 실측 대기).
