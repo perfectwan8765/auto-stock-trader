@@ -1,13 +1,17 @@
-"""Phase 3 ① — Alpha158 + LightGBM 배선 스모크 러너.
+"""Phase 3 — Alpha158 + LightGBM 학습·백테스트 러너 (config 구동).
 
-workflow_config_alpha158_lgb_pilot.yaml을 실행하고 4개 스모크 게이트를 검증한다.
-목적: "돌아가나 / Alpha158 지표 계산되나 / 라벨이 주간 fwd로 override됐나 / 백테스트가
-주간 스텝으로 도나". 41종목 지표는 배선 확인용 — 전략 우열 판단 금지(B3).
+주어진 workflow config를 실행하고 4개 게이트를 검증한다:
+  1) Alpha158 158피처 계산  2) 라벨이 주간 5일 fwd override  3) 백테스트 주간 스텝
+  4) IC/RankIC/포트폴리오 지표 산출.
 
-실행:  .venv/bin/python scripts/phase3/run_smoke.py
+  ① 배선 스모크:  --config workflow_config_alpha158_lgb_pilot.yaml  (41종목, 지표=배선용)
+  ② 엣지 판독:    --config workflow_config_alpha158_lgb_sp500.yaml  (S&P500 전체, SPY 벤치)
+
+실행:  .venv/bin/python scripts/phase3/run_smoke.py [--config <yaml>]
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -28,11 +32,11 @@ from qlib.workflow import R
 from qlib.workflow.record_temp import PortAnaRecord, SigAnaRecord, SignalRecord
 
 ROOT = Path(__file__).resolve().parents[2]
-CONFIG = Path(__file__).with_name("workflow_config_alpha158_lgb_pilot.yaml")
+DEFAULT_CONFIG = "workflow_config_alpha158_lgb_pilot.yaml"
 
 
-def _load_config() -> dict:
-    with CONFIG.open() as f:
+def _load_config(path: Path) -> dict:
+    with path.open() as f:
         return yaml.YAML(typ="safe", pure=True).load(f)
 
 
@@ -41,22 +45,56 @@ def _gate(ok: bool, msg: str) -> bool:
     return ok
 
 
-def main() -> None:
-    cfg = _load_config()
+def _ensure_tradable_instruments(provider_uri: Path, market: str, benchmark: str | None) -> None:
+    """벤치마크(SPY 등)를 매매 유니버스에서 제외한 instruments/<market>.txt 생성.
 
-    # provider_uri는 레포 루트 기준 상대경로 → 절대경로로.
+    dump_bin은 all.txt(전체, SPY 포함)만 만든다. 벤치 전용 종목을 랭킹·매매에서 빼려면
+    all.txt에서 benchmark를 제외한 별도 instruments 파일이 필요. all.txt 갱신 반영 위해 매번 재생성.
+    """
+    if market == "all" or not benchmark:
+        return
+    inst_dir = provider_uri / "instruments"
+    all_txt = inst_dir / "all.txt"
+    if not all_txt.exists():
+        raise SystemExit(f"[오류] {all_txt} 없음 — 먼저 Phase 2 파이프라인으로 dump 필요")
+    all_lines = all_txt.read_text().splitlines()
+    kept = [ln for ln in all_lines if ln.strip() and ln.split("\t")[0].upper() != benchmark.upper()]
+    (inst_dir / f"{market}.txt").write_text("\n".join(kept) + "\n")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=DEFAULT_CONFIG, help="phase3 디렉토리 내 workflow config 파일명(또는 경로)")
+    args = ap.parse_args()
+
+    cfg_path = Path(args.config)
+    if not cfg_path.is_absolute() and not cfg_path.exists():
+        cfg_path = Path(__file__).with_name(args.config)
+    cfg = _load_config(cfg_path)
+
     init_kwargs = dict(cfg["qlib_init"])
-    init_kwargs["provider_uri"] = str(ROOT / init_kwargs["provider_uri"])
+    provider_uri = ROOT / init_kwargs["provider_uri"]
+    init_kwargs["provider_uri"] = str(provider_uri)
+
+    market = cfg["task"]["dataset"]["kwargs"]["handler"]["kwargs"]["instruments"]
+    benchmark = cfg["port_analysis_config"]["backtest"].get("benchmark")
+    _ensure_tradable_instruments(provider_uri, market, benchmark)
+
     qlib.init(**init_kwargs)
 
-    # ① 벤치마크 = 41종목 등가중(실데이터). SPY 대비는 ② 확장(B3).
-    universe = D.list_instruments(D.instruments("all"), as_list=True)
-    cfg["port_analysis_config"]["backtest"]["benchmark"] = universe
+    # 벤치마크: config에 지정(SPY 등) 있으면 그대로, null이면 매매 유니버스 등가중 주입.
+    if not benchmark:
+        eqw = D.list_instruments(D.instruments(market), as_list=True)
+        cfg["port_analysis_config"]["backtest"]["benchmark"] = eqw
+        print(f"ℹ️  벤치마크 미지정 → {market} {len(eqw)}종목 등가중 주입")
+    else:
+        print(f"ℹ️  벤치마크 = {benchmark}")
 
     dataset: DatasetH = init_instance_by_config(cfg["task"]["dataset"])
     model = init_instance_by_config(cfg["task"]["model"])
 
-    with R.start(experiment_name="phase3_smoke_alpha158_lgb_pilot"):
+    exp_name = f"phase3_{cfg_path.stem}"
+    with R.start(experiment_name=exp_name):
         print("\n🔧 학습 시작 (valid early-stop, seed 고정)")
         model.fit(dataset)  # R.log_metrics가 활성 recorder에 기록되도록 컨텍스트 안에서 학습
 
@@ -65,11 +103,11 @@ def main() -> None:
         SigAnaRecord(recorder=recorder, ana_long_short=False, ann_scaler=52).generate()
         PortAnaRecord(recorder=recorder, config=cfg["port_analysis_config"]).generate()
 
-        _smoke_gates(cfg, dataset, recorder)
+        _gates(cfg, market, dataset, recorder)
 
 
-def _smoke_gates(cfg: dict, dataset: DatasetH, recorder) -> None:
-    print("\n" + "=" * 60 + "\n스모크 게이트\n" + "=" * 60)
+def _gates(cfg: dict, market: str, dataset: DatasetH, recorder) -> None:
+    print("\n" + "=" * 60 + "\n게이트\n" + "=" * 60)
     passed = []
 
     # 1) Alpha158 158개 피처 계산
@@ -78,12 +116,10 @@ def _smoke_gates(cfg: dict, dataset: DatasetH, recorder) -> None:
                         f"Alpha158 피처 {feat.shape[1]}개 (기대 158), NaN 없음={not feat.isna().any().any()}"))
 
     # 2) 라벨이 주간 5거래일 fwd로 override됐나 (익일 라벨이 아니라)
-    #    dataset raw 라벨을 D.features로 계산한 -6판/-2판과 상관 비교.
     raw_label = dataset.prepare("test", col_set="label", data_key=DataHandlerLP.DK_R).iloc[:, 0].dropna()
     seg = cfg["task"]["dataset"]["kwargs"]["segments"]["test"]
-    insts = D.instruments("all")
-    # D.features 인덱스는 (instrument, datetime), dataset 라벨은 (datetime, instrument) → 레벨 순서 맞춤.
-    lv = raw_label.index.names
+    insts = D.instruments(market)
+    lv = raw_label.index.names  # D.features는 (instrument, datetime), 라벨은 (datetime, instrument) → 맞춤
     wk = D.features(insts, ["Ref($close,-6)/Ref($close,-1)-1"], seg[0], seg[1]).iloc[:, 0].reorder_levels(lv)
     dy = D.features(insts, ["Ref($close,-2)/Ref($close,-1)-1"], seg[0], seg[1]).iloc[:, 0].reorder_levels(lv)
     j = pd.DataFrame({"raw": raw_label, "wk": wk, "dy": dy}).dropna()
@@ -107,9 +143,12 @@ def _smoke_gates(cfg: dict, dataset: DatasetH, recorder) -> None:
 
     print("\n" + "=" * 60)
     if all(passed):
-        print("✅ ① 배선 스모크 PASS. 지표는 배선 확인용(41종목 랭킹 무의미) — 엣지 판독은 ② 확장.")
+        n_inst = len(D.list_instruments(D.instruments(market), as_list=True))
+        note = ("지표는 배선 확인용(랭킹 무의미)" if n_inst < 100
+                else "유니버스 충분 → 지표로 엣지 판독 가능. Sharpe 4+면 과최적 의심")
+        print(f"✅ PASS ({market}, {n_inst}종목). {note}")
     else:
-        print("❌ 스모크 실패 — 위 게이트 확인")
+        print("❌ 실패 — 위 게이트 확인")
         sys.exit(1)
 
 
