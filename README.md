@@ -37,7 +37,7 @@ python -m venv .venv                        # pyenv 3.10.13 기준
 - [~] **Phase 5** 토스 발주 어댑터 — **골격 완료**(개선10/13 예외화·리밸/OMS `src/execution`), **실발주는 Phase 0 대기**
 - [ ] **Phase 6~7** 스모크 테스트 + 소액 실전 (Phase 0 필요)
 
-> ⚠️ Phase 3 결론: 베이스라인(Alpha158+LGBM·주간·US대형주)은 SPY 대비 **exploitable 엣지 미검출**. 현 단계는 **학습·시스템 완성** 목적. 최종 판정은 Phase 0 실측 비용 대기.
+> Phase 3 결론: 베이스라인(Alpha158+LightGBM, 주간, 미국 대형주)에서는 SPY 대비 exploitable 엣지가 검출되지 않았다. 현 단계 목적은 학습과 시스템 완성이며, 최종 판정은 Phase 0의 실측 비용을 반영해 다시 내린다.
 
 ## 구조
 
