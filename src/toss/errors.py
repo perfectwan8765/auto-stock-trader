@@ -22,14 +22,19 @@ class TossAuthError(TossError):
 
 
 class TossApiError(TossError):
-    """토스 OpenAPI HTTP 4xx/5xx 응답."""
+    """토스 OpenAPI HTTP 4xx/5xx 응답.
+
+    개선13 일관: 비-JSON 응답 본문(resp.text, 임의·잠재 누설)은 메시지에 덤프하지 않는다.
+    구조화 에러(code/message)만 메시지에 노출. 원문은 `self.body`로 프로그래매틱 접근만 허용.
+    """
 
     def __init__(self, method: str, path: str, status: int, body: Any):
         self.status = status
         self.body = body
-        # openapi.json 에러 스키마가 code/message를 준다는 가정, 없으면 원문
-        code = ""
+        code, msg = "", ""
         if isinstance(body, dict):
             code = body.get("code") or body.get("error") or ""
+            msg = body.get("message") or body.get("error_description") or ""
         self.code = code
-        super().__init__(f"{method} {path} -> {status} {code}: {body}")
+        detail = f" {code}{': ' + msg if msg else ''}".rstrip()
+        super().__init__(f"{method} {path} -> {status}{detail}")

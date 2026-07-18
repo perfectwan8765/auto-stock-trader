@@ -69,6 +69,20 @@ def test_api_error_on_4xx():
     assert ei.value.code == "not-found"
 
 
+def test_api_error_non_json_body_not_leaked():
+    """개선13 일관: 비-JSON 응답(502 HTML 등) resp.text는 메시지에 덤프 안 됨."""
+    client = TossClient(_cfg())
+    leak = "<html>UPSTREAM_SECRET_TOKEN_IN_HTML</html>"
+    with mock.patch.object(client.tokens, "get_token", return_value="tok"), \
+         mock.patch.object(client.session, "request",
+                           return_value=_resp(502, text=leak, raise_json=True)):
+        with pytest.raises(TossApiError) as ei:
+            client.get("/api/v1/holdings")
+    assert leak not in str(ei.value)      # 원문 미노출
+    assert "502" in str(ei.value)
+    assert ei.value.body == leak          # 단 프로그래매틱 접근은 보존
+
+
 # --- 개선13: OAuth 에러 redact (resp.text 미노출) ---
 
 def test_auth_failure_redacts_resp_text():
