@@ -12,25 +12,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-from pathlib import Path
 
-os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
-
-import ruamel.yaml as yaml
+from _common import ROOT, load_config, qlib_init_kwargs  # qlib import 전(MLFLOW env 설정)
 
 import qlib
 from qlib.data.dataset import DatasetH
 from qlib.utils import init_instance_by_config
 
-ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = "workflow_config_alpha158_lgb_sp500.yaml"
 SIGNAL_DIR = ROOT / "signals"
-
-
-def _load_config(path: Path) -> dict:
-    with path.open() as f:
-        return yaml.YAML(typ="safe", pure=True).load(f)
 
 
 def main() -> None:
@@ -39,13 +29,8 @@ def main() -> None:
     ap.add_argument("--topk", type=int, default=20)
     args = ap.parse_args()
 
-    cfg_path = Path(args.config)
-    if not cfg_path.is_absolute() and not cfg_path.exists():
-        cfg_path = Path(__file__).with_name(args.config)
-    cfg = _load_config(cfg_path)
-
-    init_kwargs = dict(cfg["qlib_init"])
-    init_kwargs["provider_uri"] = str(ROOT / init_kwargs["provider_uri"])
+    cfg, cfg_path = load_config(args.config)
+    init_kwargs, _ = qlib_init_kwargs(cfg)
     qlib.init(**init_kwargs)
 
     print("🔧 dataset 빌드 + 학습(valid early-stop, seed 고정)...")

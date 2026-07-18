@@ -12,16 +12,13 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
-# 신버전 mlflow는 파일스토어 tracking 백엔드를 기본 차단 → 로컬 실험 기록에 opt-in.
-os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
+from _common import load_config, qlib_init_kwargs  # qlib import 전(MLFLOW env 설정)
 
 import numpy as np
 import pandas as pd
-import ruamel.yaml as yaml
 
 import qlib
 from qlib.data import D
@@ -31,13 +28,7 @@ from qlib.utils import init_instance_by_config
 from qlib.workflow import R
 from qlib.workflow.record_temp import PortAnaRecord, SigAnaRecord, SignalRecord
 
-ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = "workflow_config_alpha158_lgb_pilot.yaml"
-
-
-def _load_config(path: Path) -> dict:
-    with path.open() as f:
-        return yaml.YAML(typ="safe", pure=True).load(f)
 
 
 def _gate(ok: bool, msg: str) -> bool:
@@ -67,14 +58,8 @@ def main() -> None:
     ap.add_argument("--config", default=DEFAULT_CONFIG, help="model_backtest 디렉토리 내 workflow config 파일명(또는 경로)")
     args = ap.parse_args()
 
-    cfg_path = Path(args.config)
-    if not cfg_path.is_absolute() and not cfg_path.exists():
-        cfg_path = Path(__file__).with_name(args.config)
-    cfg = _load_config(cfg_path)
-
-    init_kwargs = dict(cfg["qlib_init"])
-    provider_uri = ROOT / init_kwargs["provider_uri"]
-    init_kwargs["provider_uri"] = str(provider_uri)
+    cfg, cfg_path = load_config(args.config)
+    init_kwargs, provider_uri = qlib_init_kwargs(cfg)
 
     market = cfg["task"]["dataset"]["kwargs"]["handler"]["kwargs"]["instruments"]
     benchmark = cfg["port_analysis_config"]["backtest"].get("benchmark")
