@@ -1,7 +1,8 @@
-# Phase 2 — 데이터 파이프라인 (S&P500 파일럿 → Qlib bin)
+# Phase 2 — 데이터 파이프라인 (S&P500 → Qlib bin)
 
 yfinance로 미국주식 일봉을 수집하고 Qlib `.bin` 포맷으로 변환한다.
-파일럿: S&P500 대형주 41종목([../../universe/sp500_pilot.txt](../../universe/sp500_pilot.txt)), 2015~현재(~2900거래일).
+**기본 유니버스: S&P500 전체 503종목 + 벤치 SPY**([../../universe/sp500_full.txt](../../universe/sp500_full.txt), Wikipedia 스크랩 `gen_sp500_universe.py`), 2015~현재(~2900거래일).
+파일럿 41종목([../../universe/sp500_pilot.txt](../../universe/sp500_pilot.txt))은 `QLIB_UNIVERSE=sp500_pilot.txt`로 재현.
 
 ## 접근 (하이브리드)
 
@@ -32,7 +33,7 @@ Phase 3에서 `qlib.init(provider_uri="data/qlib_us", region=REG_US)`로 사용.
 
 ## 증분 갱신
 
-**전체 재빌드로 처리** — `run_pipeline.py` 재실행. 41종목이면 1~2분.
+**전체 재빌드로 처리** — `run_pipeline.py` 재실행. 파일럿 41종목 1~2분, 전체 503+SPY ~20분(yfinance 순차 수집).
 factor 재계산·달력 드리프트 위험을 없애려 `dump_update`(증분 append) 대신 매번
 전체 재빌드(멱등·안전). vendor에 `dump_update`는 있으나 파일럿 규모엔 불필요.
 
@@ -63,7 +64,8 @@ factor 재계산·달력 드리프트 위험을 없애려 `dump_update`(증분 a
 
 | 경로 | 내용 | git |
 |------|------|-----|
-| `universe/sp500_pilot.txt` | 파일럿 티커 | 커밋 |
+| `universe/sp500_full.txt` | 전체 503+SPY 티커 (기본) | 커밋 |
+| `universe/sp500_pilot.txt` | 파일럿 41 티커 | 커밋 |
 | `data/raw/*.csv` | yfinance 원본(OHLCV+adjclose) | 무시 |
 | `data/normalized/*.csv` | 정규화(factor 포함) | 무시 |
 | `data/qlib_us/` | Qlib bin (provider_uri) | 무시 |
