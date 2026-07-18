@@ -43,6 +43,23 @@ grilling 결정(2026-07-17, [../../qlib-toss.md](../../qlib-toss.md) Phase 3)의
    → 즉시 early-stop. train/valid로 재튜닝 필요. "엣지 없음"이 아니라 "이 config로 미검출".
 3. 수집 실패 3종목(FDXF/HONA/Q, Wikipedia 파싱 잡음). 매매 유니버스 500 확정.
 
+## A1 모델 탐색 (2026-07-18) — 엣지 미검출, 3축 배제 (valid 전용, test 미관측)
+
+②의 약신호가 config 문제인지 규명. **모든 축에서 노이즈급** → 구조적 한계 확정.
+도구: `tune_hyperparams.py`(하이퍼파라미터) · `probe_label_horizon.py`(라벨 horizon) · `probe_models.py`(GBDT 피어).
+
+| 축 | 결과 (valid RankIC) | 판정 |
+|---|---|---|
+| 하이퍼파라미터 6종 | 최고 0.005 (very_light), baseline_cn은 early-stop@1 언더피팅 | 노이즈 |
+| 라벨 horizon (5/10/21일) | 5d 0.0045 · 10d **-0.001** · 21d 0.008 (비단조·부호 튐) | 노이즈 |
+| 모델 (LGBM/XGB/DoubleEnsemble) | LGBM 0.0045 ≈ XGB 0.0044 · DE **-0.003** | 노이즈, LGBM 최상 |
+
+웹 캘리브레이션: 우리 valid IC(0.005) ≈ 독립 실무([Vadim](https://vadim.blog/qlib-ai-quant-workflow-lightgbm) 0.0045). qlib CN 벤치 IC 0.04는 시장특수(A주 비효율·일간라벨). US 효율적 대형주에선 낮은 IC가 정상.
+
+**결론**: 약신호는 하이퍼파라미터·horizon·모델 탓 아님 = **Alpha158+US대형주+주간라벨의 구조적 상한**. LightGBM은 문제 아님(동급 최상).
+**미탐색**: Alpha360+DL(PyTorch 미설치·CN-proven·큰 작업) — $700 학습프로젝트엔 과투자로 보류.
+**미확정**: 최종 판정은 **Phase 0 실측 비용**에 의존(비용전 ≈ SPY라, 실측 비용 낮으면 재판정 여지).
+
 ## ① 설계 결정 (config 요약)
 
 | 항목 | 값 | 근거 |
