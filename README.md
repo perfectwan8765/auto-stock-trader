@@ -51,6 +51,7 @@ tests/             단위테스트 (pytest) — toss·rebalance·safety·runner
 universe/          유니버스 티커 리스트 (S&P500 전체 + 파일럿)
 vendor/            외부 원본 파일 (qlib dump_bin.py) — 수정 금지
 qlib-toss.md       전체 작업계획서
+ARCHITECTURE.md    아키텍처·데이터 흐름 (레이어·flow 다이어그램)
 requirements.txt   의존성 핀 (재현용)
 ```
 
