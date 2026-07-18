@@ -59,6 +59,15 @@ def test_live_places_orders():
     assert set(res.placed) == {o.client_order_id for o in broker.placed}
 
 
+def test_live_sells_before_buys():
+    # NVDA 보유(편출) + 신규 매수 → 실발주 순서: 매도(NVDA) 먼저, 그 다음 매수(개선1).
+    broker = MockBroker(holdings={"NVDA": 3.0}, buying_power=700.0)
+    RebalanceRunner(broker, min_order_usd=1.0).run(TW, "20260716", dry_run=False)
+    sides = [o.side for o in broker.placed]
+    assert broker.placed[0].side == "SELL" and broker.placed[0].symbol == "NVDA"
+    assert sides.index("SELL") < sides.index("BUY")
+
+
 def test_market_closed_aborts():
     broker = MockBroker(market_open=False)
     res = RebalanceRunner(broker, min_order_usd=1.0).run(TW, "20260716", dry_run=False)
