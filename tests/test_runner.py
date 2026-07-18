@@ -1,18 +1,12 @@
 """RebalanceRunner 단위테스트 (MockBroker — 실 API 불요)."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from execution.errors import CircuitBreakerTripped, KillSwitchActive  # noqa: E402
-from execution.interface import OrderIntent  # noqa: E402
-from execution.runner import RebalanceRunner  # noqa: E402
-from execution.safety import CircuitBreaker  # noqa: E402
+from execution.errors import CircuitBreakerTripped, KillSwitchActive
+from execution.interface import OrderIntent
+from execution.runner import RebalanceRunner
+from execution.safety import CircuitBreaker
 
 
 class MockBroker:

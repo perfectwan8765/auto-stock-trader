@@ -1,16 +1,10 @@
 """안전장치 단위테스트 (개선4): kill switch · 서킷브레이커."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from execution.errors import CircuitBreakerTripped, KillSwitchActive  # noqa: E402
-from execution.safety import CircuitBreaker, check_kill_switch  # noqa: E402
+from execution.errors import CircuitBreakerTripped, KillSwitchActive
+from execution.safety import CircuitBreaker, check_kill_switch
 
 
 def test_kill_switch_inactive_when_absent(tmp_path):

@@ -5,14 +5,8 @@
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from execution.interface import RebalanceParams  # noqa: E402
-from execution.rebalance import compute_rebalance, make_client_order_id  # noqa: E402
+from execution.interface import RebalanceParams
+from execution.rebalance import compute_rebalance, make_client_order_id
 
 
 def _params(**kw):
