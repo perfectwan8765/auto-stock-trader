@@ -15,7 +15,13 @@ grilling 결정(2026-07-17, [../../qlib-toss.md](../../qlib-toss.md) Phase 3)의
 .venv/bin/python scripts/model_backtest/run_backtest.py --config workflow_config_alpha158_lgb_pilot.yaml
 # ② 엣지 판독 (S&P500 500종목, SPY 벤치)
 .venv/bin/python scripts/model_backtest/run_backtest.py --config workflow_config_alpha158_lgb_sp500.yaml
+# Phase 4: 최신일 예측 → 상위 K 등가중 목표비중 → signals/signal_<date>.json
+.venv/bin/python scripts/model_backtest/generate_signal.py --topk 20
 ```
+
+`generate_signal.py`는 학습모델로 최신 거래일을 예측 → 상위 K 등가중 시그널(JSON) 생성.
+이 JSON이 Phase 5 `execution.compute_rebalance`의 목표비중 입력. ⚠️ 엣지 미검출 베이스라인이라
+**배관/데모용**(실알파 아님). `signals/`는 생성물이라 gitignore.
 
 러너는 config 구동. `--config`의 handler `instruments`가 `sp500`이면 `instruments/sp500.txt`
 (= `all.txt` − SPY, 매매 유니버스)를 자동 생성하고 `benchmark: SPY`를 쓴다. `benchmark: null`이면
