@@ -192,6 +192,13 @@
 
 ## Phase 5 — 토스 어댑터 (시그널 → 발주)
 
+> **진행(2026-07-18, P2 골격)**: 리서치(qlib은 예측까지만 지원 → 발주는 자작)로 **레이어 분리** 확정.
+> `src/toss`(브로커 transport) ↔ `src/execution`(브로커 비의존 OMS). 완료:
+> - `execution/rebalance.compute_rebalance`(순수): 목표비중 diff → 매도先→매수, 개선1(자금이월)·5(멱등키)·8(최소금액). 단위테스트 7.
+> - `execution/safety`: kill switch·서킷브레이커(개선4). 테스트 4.
+> - `toss/broker.TossBroker`: transport glue(⚠️ 응답필드 Phase 0 실측 확정 전 방어파싱).
+> **잔여**: 실 API 배선·응답필드 확정(Phase 0 대기), 발주 runner(Phase 4 시그널 필요), 개선11(401 재시도).
+
 - 모듈: `auth`(토큰캐싱) · `account`(holdings·buying-power) · `order`(생성·조회)
 - 리밸런싱 로직: 현 보유 vs 목표 diff → 매도(빠질 종목, 수량 시장가) → 매수(금액 시장가 orderAmount)
 - **[개선1] 매도→매수 자금순환(T+N):** 매수 전 `buying-power` 재조회, **가용 USD 기준으로만 발주**. 매도대금이 T+N로 즉시 안 잡히면(Phase 0-6 결과) 매수는 결제 반영분·현금버퍼 내에서만 → 목표 미달분은 다음 주기로 이월(부분 리밸런싱 허용)
