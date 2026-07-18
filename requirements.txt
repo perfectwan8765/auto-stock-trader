@@ -24,3 +24,7 @@ yfinance==1.5.1
 fire==0.7.1
 loguru==0.7.3
 tqdm==4.68.4
+
+# --- 테스트 ---
+# src/toss 단위테스트(mock 응답). 개선10/13 예외·redact 회귀 방지.
+pytest==9.1.1

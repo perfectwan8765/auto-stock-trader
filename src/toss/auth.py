@@ -8,9 +8,26 @@ from pathlib import Path
 import requests
 
 from .config import Config, PROJECT_ROOT
+from .errors import TossAuthError
 
 _CACHE_PATH = PROJECT_ROOT / ".cache" / "toss_token.json"
 _EXPIRY_SKEW_SEC = 60  # 만료 직전 안전 마진
+
+
+def _oauth_error_detail(resp: requests.Response) -> str:
+    """개선13: 표준 OAuth error/error_description(비밀 아님)만 추출. 비-JSON이면 빈 문자열.
+    resp.text 전체(임의 본문·잠재 누설)는 절대 노출하지 않는다."""
+    try:
+        body = resp.json()
+    except ValueError:
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    err = body.get("error") or body.get("code") or ""
+    desc = body.get("error_description") or body.get("message") or ""
+    if not (err or desc):
+        return ""
+    return f" ({err}{': ' + desc if desc else ''})"
 
 
 class TokenManager:
@@ -72,14 +89,15 @@ class TokenManager:
             timeout=15,
         )
         if resp.status_code != 200:
-            raise SystemExit(
-                f"[인증 실패] POST /oauth2/token -> {resp.status_code}\n{resp.text}"
+            # 개선13: resp.text(임의 본문·잠재 누설) 대신 표준 OAuth error 필드만 노출.
+            raise TossAuthError(
+                f"[인증 실패] POST /oauth2/token -> {resp.status_code}{_oauth_error_detail(resp)}"
             )
         body = resp.json()
         token = body.get("access_token")
         expires_in = int(body.get("expires_in", 0))
         if not token:
-            raise SystemExit(f"[인증 실패] access_token 없음: {body}")
+            raise TossAuthError("[인증 실패] 응답에 access_token 없음 (status 200)")
         return token, expires_in
 
     def get_token(self, force_refresh: bool = False) -> str:

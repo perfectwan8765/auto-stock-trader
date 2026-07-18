@@ -12,18 +12,7 @@ import requests
 
 from .auth import TokenManager
 from .config import Config
-
-
-class TossApiError(RuntimeError):
-    def __init__(self, method: str, path: str, status: int, body: Any):
-        self.status = status
-        self.body = body
-        # openapi.json 에러 스키마가 code/message를 준다는 가정, 없으면 원문
-        code = ""
-        if isinstance(body, dict):
-            code = body.get("code") or body.get("error") or ""
-        self.code = code
-        super().__init__(f"{method} {path} -> {status} {code}: {body}")
+from .errors import TossApiError, TossConfigError  # noqa: F401  (TossApiError re-export: 기존 import 호환)
 
 
 class TossClient:
@@ -37,7 +26,7 @@ class TossClient:
         headers = {"Authorization": f"Bearer {self.tokens.get_token()}"}
         if need_account:
             if not self.cfg.has_account:
-                raise SystemExit(
+                raise TossConfigError(
                     "[설정 오류] 이 API는 X-Tossinvest-Account가 필요합니다.\n"
                     "  Phase 0-2(01_accounts.py)로 계좌식별자를 확인해 .env의 TOSS_ACCOUNT에 넣으세요."
                 )
