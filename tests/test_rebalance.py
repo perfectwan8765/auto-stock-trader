@@ -66,11 +66,31 @@ def test_insufficient_buying_power_carryover():
 
 
 def test_client_order_id_deterministic():
-    a = make_client_order_id("20260718", "AAPL", "BUY", 350.0)
-    b = make_client_order_id("20260718", "AAPL", "BUY", 350.0)
-    c = make_client_order_id("20260719", "AAPL", "BUY", 350.0)
+    a = make_client_order_id("20260718", "AAPL", "BUY")
+    b = make_client_order_id("20260718", "AAPL", "BUY")
+    c = make_client_order_id("20260719", "AAPL", "BUY")
     assert a == b and a != c  # 재현 가능·일자 다르면 다름(개선5)
     assert a.startswith("rb-")
+
+
+def test_trim_overweight_sells_excess():
+    # AAPL 목표 350인데 700 보유(overweight) → 초과분 350어치(3.5주) trim 매도.
+    plan = compute_rebalance({"AAPL": 0.5, "MSFT": 0.5}, {"AAPL": 7.0}, {"AAPL": 100, "MSFT": 100}, _params())
+    trims = [o for o in plan.orders if o.reason == "trim"]
+    assert len(trims) == 1 and trims[0].symbol == "AAPL"
+    assert trims[0].side == "SELL" and trims[0].kind == "quantity"
+    assert abs(trims[0].value - 3.5) < 1e-6
+
+
+def test_client_order_id_stable_across_buying_power():
+    # 개선5 핵심: 부분매수든 완전매수든 (일자·종목·side) 같으면 동일 키 → T+N로 가용액
+    # 달라져도 재실행 시 중복주문 안 남.
+    full = compute_rebalance({"AAPL": 1.0}, {}, {"AAPL": 100}, _params(buying_power_usd=700.0))
+    part = compute_rebalance({"AAPL": 1.0}, {}, {"AAPL": 100}, _params(buying_power_usd=400.0))
+    fb = [o for o in full.orders if o.symbol == "AAPL"][0]
+    pb = [o for o in part.orders if o.symbol == "AAPL"][0]
+    assert fb.value != pb.value          # 금액은 다름(700 vs 400)
+    assert fb.client_order_id == pb.client_order_id  # 그러나 키는 동일(멱등 유지)
 
 
 def test_no_trade_when_on_target():

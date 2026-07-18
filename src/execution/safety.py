@@ -18,7 +18,15 @@ def check_kill_switch(path: str | Path) -> None:
 
 
 class CircuitBreaker:
-    """일일 주문건수·손실 상한. 발주 루프에서 각 주문 전 `guard()` 호출."""
+    """일일 주문건수·손실 상한.
+
+    발주 루프 사용 패턴(러너):
+        cb.guard()            # 발주 직전 상한 확인(초과 시 CircuitBreakerTripped)
+        broker.place(intent)
+        cb.record_order()     # 발주 성공 후 카운트
+        cb.record_loss(usd)   # 실현손실 확인 시 누적(다음 guard에서 반영)
+    상태는 인메모리(단일 실행 한정). 프로세스 재기동 넘는 지속은 Phase 6에서 파일 상태로.
+    """
 
     def __init__(self, max_orders_per_day: int, max_loss_usd: float):
         self.max_orders_per_day = max_orders_per_day

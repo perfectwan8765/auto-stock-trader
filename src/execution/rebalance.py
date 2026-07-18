@@ -14,9 +14,14 @@ import hashlib
 from .interface import OrderIntent, RebalanceParams, RebalancePlan
 
 
-def make_client_order_id(rebalance_date: str, symbol: str, side: str, value: float) -> str:
-    """개선5: 같은 (일자·종목·side·금액)이면 동일 키 → 중복주문 방지·재개 멱등."""
-    raw = f"{rebalance_date}:{symbol}:{side}:{value:.2f}"
+def make_client_order_id(rebalance_date: str, symbol: str, side: str) -> str:
+    """개선5: (일자·종목·side)로 결정적 멱등키.
+
+    금액은 키에서 **제외** — T+N 정산으로 재실행 시 가용액·목표금액이 달라질 수 있어
+    금액을 넣으면 재시도/부분매수 재개 때 키가 바뀌어 중복주문 위험(멱등 붕괴). 하루 한
+    종목당 side별 1주문(주간 리밸) 가정 하에 (일자·종목·side)면 재현·중복방지 충분.
+    """
+    raw = f"{rebalance_date}:{symbol}:{side}"
     return "rb-" + hashlib.sha1(raw.encode()).hexdigest()[:20]
 
 
@@ -31,8 +36,8 @@ def compute_rebalance(
 
     target_usd = {s: w * params.total_equity_usd for s, w in target_weights.items() if w > 0}
 
-    def cid(sym: str, side: str, value: float) -> str:
-        return make_client_order_id(params.rebalance_date, sym, side, value)
+    def cid(sym: str, side: str) -> str:
+        return make_client_order_id(params.rebalance_date, sym, side)
 
     def current_usd(sym: str) -> float:
         return holdings.get(sym, 0.0) * prices.get(sym, 0.0)
@@ -41,15 +46,15 @@ def compute_rebalance(
     for sym, qty in holdings.items():
         if qty <= 0:
             continue
-        if sym not in target_usd:  # 편출
-            orders.append(OrderIntent(sym, "SELL", "quantity", qty, cid(sym, "SELL", qty), "exit"))
+        if sym not in target_usd:  # 편출: broker 권위값(보유수량) 그대로 — 반올림 시 over-sell 위험
+            orders.append(OrderIntent(sym, "SELL", "quantity", qty, cid(sym, "SELL"), "exit"))
 
     for sym in target_usd:
         price = prices.get(sym, 0.0)
         excess = current_usd(sym) - target_usd[sym]
         if excess > params.min_order_usd and price > 0:
-            qty = excess / price
-            orders.append(OrderIntent(sym, "SELL", "quantity", qty, cid(sym, "SELL", qty), "trim"))
+            qty = round(excess / price, 8)  # 소수점 주식수 정규화(문자열화 오차 방지)
+            orders.append(OrderIntent(sym, "SELL", "quantity", qty, cid(sym, "SELL"), "trim"))
 
     # --- 매수(後): 가용 USD 한도 내 greedy(큰 갭 우선), 최소금액·이월 처리 ---
     buys = []
@@ -68,12 +73,12 @@ def compute_rebalance(
         reason = "enter" if holdings.get(sym, 0.0) <= 0 else "add"
         if gap <= available:
             amt = round(gap, 2)
-            orders.append(OrderIntent(sym, "BUY", "amount", amt, cid(sym, "BUY", amt), reason))
+            orders.append(OrderIntent(sym, "BUY", "amount", amt, cid(sym, "BUY"), reason))
             available -= gap
         elif available >= params.min_order_usd:
-            # 부분 매수(가용 잔액), 나머지 다음 사이클 이월(개선1)
+            # 부분 매수(가용 잔액), 나머지 다음 사이클 이월(개선1). 키는 금액 무관(멱등).
             amt = round(available, 2)
-            orders.append(OrderIntent(sym, "BUY", "amount", amt, cid(sym, "BUY", amt), reason))
+            orders.append(OrderIntent(sym, "BUY", "amount", amt, cid(sym, "BUY"), reason))
             skipped.append((sym, "partial_insufficient_buying_power"))
             available = 0.0
         else:
