@@ -37,11 +37,41 @@ SIGNAL_DIR = ROOT / "signals"
 LOG_DIR = ROOT / "execution_logs"
 
 
+def _positive_float(v: str) -> float:
+    f = float(v)
+    if f <= 0:
+        raise argparse.ArgumentTypeError(f"양수여야 함: {v}")
+    return f
+
+
+def _positive_int(v: str) -> int:
+    i = int(v)
+    if i <= 0:
+        raise argparse.ArgumentTypeError(f"양수여야 함: {v}")
+    return i
+
+
 def _latest_signal() -> Path:
     sigs = sorted(SIGNAL_DIR.glob("signal_*.json"))
     if not sigs:
         raise SystemExit("[오류] signals/ 없음 — 먼저 generate_signal.py 실행")
     return sigs[-1]
+
+
+def _load_signal(path: Path) -> tuple[dict, str]:
+    """시그널 JSON에서 weights·date 추출. 누락·손상은 clean SystemExit로."""
+    try:
+        sig = json.loads(path.read_text())
+    except FileNotFoundError:
+        raise SystemExit(f"[오류] 시그널 파일 없음: {path}")
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"[오류] 시그널 JSON 파싱 실패: {path} ({e})")
+    weights, date = sig.get("weights"), sig.get("date")
+    if not isinstance(weights, dict) or not weights:
+        raise SystemExit(f"[오류] 시그널에 weights 없음/빈값: {path}")
+    if not isinstance(date, str):
+        raise SystemExit(f"[오류] 시그널 date 형식 오류: {path}")
+    return sig, date
 
 
 def _print_result(res, dry_run: bool) -> None:
@@ -62,18 +92,18 @@ def _print_result(res, dry_run: bool) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--signal", default=None, help="시그널 JSON 경로(생략 시 최신)")
-    ap.add_argument("--budget", type=float, default=700.0, help="봇 매수 예산 상한(USD)")
-    ap.add_argument("--min-order", type=float, default=1.0, help="최소 주문금액(USD, Phase 0 실측 전 placeholder)")
+    ap.add_argument("--budget", type=_positive_float, default=700.0, help="봇 매수 예산 상한(USD)")
+    ap.add_argument("--min-order", type=_positive_float, default=1.0, help="최소 주문금액(USD, Phase 0 실측 전 placeholder)")
     ap.add_argument("--state", default=str(LOG_DIR / "managed_state.json"), help="화이트리스트 상태 파일")
     ap.add_argument("--kill-switch", default=str(ROOT / "KILL"), help="이 파일 존재 시 발주 중단")
-    ap.add_argument("--max-orders", type=int, default=60, help="일일 주문건수 상한(서킷브레이커)")
-    ap.add_argument("--max-loss", type=float, default=700.0, help="일일 손실 상한(USD, 손익 배선은 Phase 0)")
+    ap.add_argument("--max-orders", type=_positive_int, default=60, help="일일 주문건수 상한(서킷브레이커)")
+    ap.add_argument("--max-loss", type=_positive_float, default=700.0, help="일일 손실 상한(USD, 손익 배선은 Phase 0)")
     ap.add_argument("--confirm", action="store_true", help="실발주. 없으면 dry-run.")
     args = ap.parse_args()
 
     sig_path = Path(args.signal) if args.signal else _latest_signal()
-    sig = json.loads(sig_path.read_text())
-    weights, date = sig["weights"], sig["date"].replace("-", "")
+    sig, date_raw = _load_signal(sig_path)
+    weights, date = sig["weights"], date_raw.replace("-", "")
 
     cfg = load_config(require_account=True)   # 주문 API는 X-Tossinvest-Account 필요
     broker = TossBroker(TossClient(cfg))
