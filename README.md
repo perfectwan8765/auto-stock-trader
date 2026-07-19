@@ -34,7 +34,7 @@ python -m venv .venv                        # pyenv 3.10.13 기준
 - [x] **Phase 2** 데이터 파이프라인 (S&P500 전체 503+SPY → Qlib bin) — `scripts/data_pipeline/` 참고
 - [x] **Phase 3** 모델 학습 + 백테스트 (①배선 ②S&P500 판독 — 엣지 미검출) — `scripts/model_backtest/` 참고
 - [x] **Phase 4** 시그널 생성 (4a 목표비중 JSON + 4b dry-run runner) — `scripts/model_backtest/`
-- [~] **Phase 5** 토스 발주 어댑터 — **골격 완료**(개선10/13 예외화·리밸/OMS `src/execution`), **실발주는 Phase 0 대기**
+- [~] **Phase 5** 토스 발주 어댑터 — **골격 완료**(개선10/13 예외화, 리밸/OMS `src/execution`, 개선14 계좌 공유 안전 화이트리스트), **실발주는 Phase 0 대기**
 - [ ] **Phase 6~7** 스모크 테스트 + 소액 실전 (Phase 0 필요)
 
 > Phase 3 결론: 베이스라인(Alpha158+LightGBM, 주간, 미국 대형주)에서는 SPY 대비 exploitable 엣지가 검출되지 않았다. 현 단계 목적은 학습과 시스템 완성이며, 최종 판정은 Phase 0의 실측 비용을 반영해 다시 내린다.
@@ -43,7 +43,7 @@ python -m venv .venv                        # pyenv 3.10.13 기준
 
 ```
 src/toss/          토스 OpenAPI 브로커 transport (config·auth·client·errors·broker)
-src/execution/     리밸런싱·OMS (브로커 비의존: interface·rebalance·safety·runner)
+src/execution/     리밸런싱·OMS (브로커 비의존: interface·rebalance·safety·runner·managed)
 scripts/toss_probe/       Phase 0 실측 툴킷 (키 발급 후 순서대로 실행)
 scripts/data_pipeline/    Phase 2 데이터 파이프라인 (수집→정규화→dump→검증)
 scripts/model_backtest/   Phase 3~4 학습·백테스트·시그널·dry-run (config 구동)
@@ -60,3 +60,4 @@ requirements.txt   의존성 핀 (재현용)
 - 자격증명은 **`.env`에서만** 읽으며 코드/저장소에 넣지 않는다 (`.env.example` 참고).
 - `.env`, `.cache/`(토큰), `phase0-findings.md`(계좌식별자)는 `.gitignore`로 커밋 차단.
 - 저장소는 **Private** 권장.
+- **계좌 공유 안전**: 토스 계좌를 사용자 수동 보유와 공유하므로, 봇은 **자기가 산 종목(관리셋)·설정 예산 안에서만** 매매한다. 사용자가 직접 산 종목·현금은 건드리지 않는다(화이트리스트, 개선14).
