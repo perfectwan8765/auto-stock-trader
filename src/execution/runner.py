@@ -54,7 +54,7 @@ class RebalanceRunner:
             excluded, managed = self.state.excluded, self.state.managed
         else:
             excluded = {s for s, q in holdings.items() if q > 0}  # 현재 보유가 곧 X
-            managed = set()                                        # 봇 보유 아직 없음
+            managed = set()
             if not dry_run:  # 실발주에서만 X 확정·영속
                 self.state.bootstrap(holdings)
                 self.state.save()
@@ -99,15 +99,15 @@ class RebalanceRunner:
 
         # --- 실발주: 안전장치 ---
         if self.kill_switch_path:
-            check_kill_switch(self.kill_switch_path)     # KillSwitchActive
+            check_kill_switch(self.kill_switch_path)
         if not self.broker.is_market_open():             # 개선6: 정규장 확인 후만
             return RunResult(plan=plan, dry_run=False, aborted_reason="market_closed")
 
         placed: list[str] = []
         for order in plan.orders:  # 매도先→매수 순서(compute_rebalance 보장)
             if self.cb is not None:
-                self.cb.guard()                          # CircuitBreakerTripped
-            self.broker.place(order)                     # 멱등키 포함
+                self.cb.guard()
+            self.broker.place(order)
             placed.append(order.client_order_id)
             if self.cb is not None:
                 self.cb.record_order()
