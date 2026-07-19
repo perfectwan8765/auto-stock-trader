@@ -155,6 +155,7 @@ universe/     티커 (sp500_full 503+SPY, sp500_pilot 41)
 scripts/
   data_pipeline/    데이터: 수집→정규화→dump→검증
   model_backtest/   모델: 학습·백테스트·시그널·dry-run
+  live/             실 발주 진입점 (dry-run 기본, --confirm 실발주)
   toss_probe/       Phase 0 실측 CLI (키 승인 후)
 src/
   execution/    리밸·안전장치 (브로커 비의존)

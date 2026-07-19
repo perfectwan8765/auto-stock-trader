@@ -202,7 +202,8 @@
 >   `execution/managed.ManagedState`가 제외셋 X(첫 실행 시 보유 동결, 봇 비관리)·관리셋 M(봇 산 종목,
 >   placed에서만 갱신)을 `execution_logs/managed_state.json`에 영속. runner는 목표에서 X 제거·M 종목만
 >   리밸 → **사용자 종목 절대 매도 안 함**. 예산 상한(budget_usd)으로 계좌 현금 과지출 차단. 테스트 8.
-> **잔여**: 실 API 배선·응답필드 확정(Phase 0 대기), 발주 실행 진입점(cron), 개선11(401 재시도).
+> - `scripts/live/rebalance.py`: 라이브 발주 진입점 — 시그널→TossBroker 조립, **dry-run 기본**(`--confirm` 실발주), 화이트리스트·예산·kill switch·서킷브레이커 배선. 키 없으면 안전 종료(TossConfigError).
+> **잔여**: 실 API 배선·응답필드 확정(Phase 0 대기), cron 스케줄(Phase 6), 개선11(401 재시도), max-loss 손익 배선(Phase 0).
 
 - 모듈: `auth`(토큰캐싱) · `account`(holdings·buying-power) · `order`(생성·조회)
 - 리밸런싱 로직: 현 보유 vs 목표 diff → 매도(빠질 종목, 수량 시장가) → 매수(금액 시장가 orderAmount)
