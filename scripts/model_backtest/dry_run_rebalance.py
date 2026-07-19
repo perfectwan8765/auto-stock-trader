@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from execution.runner import RebalanceRunner  # noqa: E402
+from execution.orderlog import write_order_log  # noqa: E402
 
 
 class SyntheticBroker:
@@ -74,7 +75,10 @@ def main() -> None:
     print(f"\n  총 {len(res.plan.orders)}건, 매수합 ${total_buy:.2f}, 스킵 {len(res.plan.skipped)}")
     if res.plan.skipped:
         print(f"  스킵: {res.plan.skipped}")
-    print("\n⚠️ dry-run(실발주 없음). 실발주는 Phase 0 후 TossBroker + dry_run=False.")
+
+    log_path = write_order_log(res, date, ROOT / "execution_logs", signal_name=sig_path.name)
+    print(f"\n📝 주문로그 저장: {log_path.relative_to(ROOT)}")
+    print("⚠️ dry-run(실발주 없음). 실발주는 Phase 0 후 TossBroker + dry_run=False.")
 
 
 if __name__ == "__main__":

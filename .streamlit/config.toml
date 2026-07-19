@@ -1,0 +1,9 @@
+# 대시보드 테마 — dataviz 팔레트(blue 주역)와 정렬.
+[theme]
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f0efec"
+textColor = "#0b0b0b"
+# OS 네이티브 sans 스택(Mac=San Francisco, Win=Segoe UI) — 다운로드 없이 선명.
+font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, sans-serif"
+headingFont = "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, sans-serif"
