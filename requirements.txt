@@ -25,6 +25,11 @@ fire==0.7.1
 loguru==0.7.3
 tqdm==4.68.4
 
+# --- 대시보드(백테스트·주문 뷰어) ---
+# mlruns pkl·execution_logs 읽어 Streamlit 웹 화면 렌더. altair는 차트에 직접 import(명시 핀).
+streamlit==1.59.2
+altair==6.2.2
+
 # --- 테스트 ---
 # src/toss 단위테스트(mock 응답). 개선10/13 예외·redact 회귀 방지.
 pytest==9.1.1
