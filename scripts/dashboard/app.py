@@ -77,11 +77,16 @@ SKIP_REASON = {
 
 
 def equity_chart(report: pd.DataFrame) -> alt.Chart:
-    """포트폴리오 vs 벤치 누적수익(시작=1.0) 라인차트. 포트=실선 blue, 벤치=점선 gray."""
+    """포트폴리오 vs 벤치 누적수익(시작=1.0) 라인차트. 포트=실선 blue, 벤치=점선 gray.
+
+    포트는 account(비용 포함 실 평가액) 기준 — 헤드라인 총수익률과 끝점이 일치.
+    (return 컬럼은 비용·현금drag 제외 gross라 실값보다 부풀려짐.)
+    """
+    bench = (1 + report["bench"]).cumprod()
     df = pd.DataFrame({
         "date": report.index,
-        "포트폴리오": (1 + report["return"]).cumprod().values,
-        "벤치마크": (1 + report["bench"]).cumprod().values,
+        "포트폴리오": (report["account"] / report["account"].iloc[0]).values,
+        "벤치마크": (bench / bench.iloc[0]).values,
     }).melt("date", var_name="계열", value_name="누적")
     dom = ["포트폴리오", "벤치마크"]
     return alt.Chart(df).mark_line(strokeWidth=2).encode(
@@ -145,12 +150,13 @@ def discover_runs() -> list[dict]:
         start = _yaml_get(run_dir / "meta.yaml", "start_time") or "0"
 
         strat = exp_name.replace("workflow_config_", "").replace("phase3_", "")
-        idx = pickle.load(open(report, "rb")).index  # 백테스트 기간·주수(라벨용)
+        with open(report, "rb") as f:
+            idx = pickle.load(f).index  # 백테스트 기간·주수(라벨용)
         d0, d1, n = idx[0].date(), idx[-1].date(), len(idx)
         exec_d = (dt.datetime.fromtimestamp(int(start) / 1000).strftime("%Y-%m-%d %H:%M")
                   if start.isdigit() else None)
         runs.append({
-            "label": f"{strat} · {d0}~{d1} ({n}주) · 실행 {exec_d}",
+            "label": f"{strat} · {d0}~{d1} ({n}주)" + (f" · 실행 {exec_d}" if exec_d else ""),
             "artifacts": artifacts,
             "start": int(start) if start.isdigit() else 0,
             "d0": d0, "d1": d1, "n": n, "exec": exec_d,
@@ -248,7 +254,8 @@ def render_backtest():
     equity = report["account"]
     start_usd, final_usd = equity.iloc[0], equity.iloc[-1]
     total_ret = final_usd / start_usd - 1
-    bench_ret = (1 + report["bench"]).prod() - 1
+    bench_wealth = (1 + report["bench"]).cumprod()
+    bench_ret = bench_wealth.iloc[-1] / bench_wealth.iloc[0] - 1  # 곡선과 동일 기준(시작 재기준화)
     ex = risk["risk"]
     ann_ex = ex.get(("excess_return_with_cost", "annualized_return"), float("nan"))
     mdd = ex.get(("excess_return_with_cost", "max_drawdown"), float("nan"))
