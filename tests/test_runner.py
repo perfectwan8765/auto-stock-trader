@@ -5,6 +5,7 @@ import pytest
 
 from execution.errors import CircuitBreakerTripped, KillSwitchActive
 from execution.interface import OrderIntent
+from execution.managed import ManagedState
 from execution.runner import RebalanceRunner
 from execution.safety import CircuitBreaker
 
@@ -54,9 +55,10 @@ def test_live_places_orders():
 
 
 def test_live_sells_before_buys():
-    # NVDA 보유(편출) + 신규 매수 → 실발주 순서: 매도(NVDA) 먼저, 그 다음 매수(개선1).
+    # NVDA를 봇이 관리(M)해야 편출 대상 → 실발주 순서: 매도(NVDA) 먼저, 그 다음 매수(개선1).
     broker = MockBroker(holdings={"NVDA": 3.0}, buying_power=700.0)
-    RebalanceRunner(broker, min_order_usd=1.0).run(TW, "20260716", dry_run=False)
+    state = ManagedState(excluded=set(), managed={"NVDA"}, bootstrapped=True)
+    RebalanceRunner(broker, min_order_usd=1.0, managed_state=state).run(TW, "20260716", dry_run=False)
     sides = [o.side for o in broker.placed]
     assert broker.placed[0].side == "SELL" and broker.placed[0].symbol == "NVDA"
     assert sides.index("SELL") < sides.index("BUY")

@@ -24,6 +24,8 @@ mlruns/
 *.bin
 # Phase 4 시그널(생성물, 매 실행 재생성)
 signals/
+# 리밸런싱 주문로그(dry-run·실발주 산출물)
+execution_logs/
 
 # OS/IDE
 .DS_Store

@@ -197,7 +197,12 @@
 > - `execution/rebalance.compute_rebalance`(순수): 목표비중 diff → 매도先→매수, 개선1(자금이월)·5(멱등키)·8(최소금액). 단위테스트 7.
 > - `execution/safety`: kill switch·서킷브레이커(개선4). 테스트 4.
 > - `toss/broker.TossBroker`: transport glue(⚠️ 응답필드 Phase 0 실측 확정 전 방어파싱).
-> **잔여**: 실 API 배선·응답필드 확정(Phase 0 대기), 발주 runner(Phase 4 시그널 필요), 개선11(401 재시도).
+> - `execution/runner.RebalanceRunner`: 스냅샷→화이트리스트 필터→compute→dry-run/실발주.
+> - **[개선14] 계좌 공유 안전(화이트리스트)** — 계좌를 사용자 수동 보유·현금과 공유하므로:
+>   `execution/managed.ManagedState`가 제외셋 X(첫 실행 시 보유 동결, 봇 비관리)·관리셋 M(봇 산 종목,
+>   placed에서만 갱신)을 `execution_logs/managed_state.json`에 영속. runner는 목표에서 X 제거·M 종목만
+>   리밸 → **사용자 종목 절대 매도 안 함**. 예산 상한(budget_usd)으로 계좌 현금 과지출 차단. 테스트 8.
+> **잔여**: 실 API 배선·응답필드 확정(Phase 0 대기), 발주 실행 진입점(cron), 개선11(401 재시도).
 
 - 모듈: `auth`(토큰캐싱) · `account`(holdings·buying-power) · `order`(생성·조회)
 - 리밸런싱 로직: 현 보유 vs 목표 diff → 매도(빠질 종목, 수량 시장가) → 매수(금액 시장가 orderAmount)

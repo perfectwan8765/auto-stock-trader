@@ -4,11 +4,13 @@
 브로커에 종속되지 않는다. 브로커는 `interface.Broker` 프로토콜로 주입 → mock으로 단위테스트.
 """
 from .interface import Broker, OrderIntent, RebalanceParams, RebalancePlan
+from .managed import ManagedState
 from .rebalance import compute_rebalance, make_client_order_id
 from .runner import RebalanceRunner, RunResult
 
 __all__ = [
     "Broker", "OrderIntent", "RebalanceParams", "RebalancePlan",
+    "ManagedState",
     "compute_rebalance", "make_client_order_id",
     "RebalanceRunner", "RunResult",
 ]
