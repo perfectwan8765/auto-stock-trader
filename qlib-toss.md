@@ -203,7 +203,7 @@
 >   placed에서만 갱신)을 `execution_logs/managed_state.json`에 영속. runner는 목표에서 X 제거·M 종목만
 >   리밸 → **사용자 종목 절대 매도 안 함**. 예산 상한(budget_usd)으로 계좌 현금 과지출 차단. 테스트 8.
 > - `scripts/live/rebalance.py`: 라이브 발주 진입점 — 시그널→TossBroker 조립, **dry-run 기본**(`--confirm` 실발주), 화이트리스트·예산·kill switch·서킷브레이커 배선. 키 없으면 안전 종료(TossConfigError).
-> **잔여**: 실 API 배선·응답필드 확정(Phase 0 대기), cron 스케줄(Phase 6), 개선11(401 재시도), max-loss 손익 배선(Phase 0).
+> **잔여**: 실 API 배선·응답필드 확정(Phase 0 대기), cron 스케줄(Phase 6), max-loss 손익 배선(Phase 0). 개선11은 구현·mock검증 완료(실 401 확인만 Phase 0).
 
 - 모듈: `auth`(토큰캐싱) · `account`(holdings·buying-power) · `order`(생성·조회)
 - 리밸런싱 로직: 현 보유 vs 목표 diff → 매도(빠질 종목, 수량 시장가) → 매수(금액 시장가 orderAmount)
@@ -214,7 +214,7 @@
 - **market-calendar/US로 정규장 확인 후** 발주
 - Rate limit 준수(호출 간 sleep), 에러코드별 처리(잔액부족·장마감·rate-limit)
 - **[개선10] 라이브러리 예외화 ✅(2026-07-18 완료):** `src/toss/`는 설정/계좌/토큰 오류를 `SystemExit` 대신 `TossError` 계열(`TossConfigError`·`TossAuthError`·`TossApiError`, `errors.py`)로 던진다. `SystemExit` 종료 변환은 CLI(`_bootstrap.cli`)에서만 → cron 자동화가 서킷브레이커·kill switch·부분 이월로 잡을 수 있음.
-- **[개선11] invalid-token 재시도 ⏳(Phase 5 유보):** `TossClient.request()`가 401 응답 시 `get_token(force_refresh=True)` 후 **1회만** 재시도(`_retry` 플래그로 상한). 401은 미처리 거부라 POST /orders 재시도도 안전(clientOrderId 멱등키 이중안전망). **API 동작 의존(실 401)이라 실검증은 키 승인 후** → 실 발주 흐름과 함께 구현.
+- **[개선11] invalid-token 재시도 ✅(2026-07-20 구현, mock 검증):** `TossClient.request()`가 401 응답 시 `get_token(force_refresh=True)` 후 **1회만** 재시도(`_retry` 플래그로 상한). 401은 미처리 거부라 POST /orders 재시도도 안전(clientOrderId 멱등키 이중안전망). mock 테스트 3(재시도·상한·비401 무재시도). **실 401 동작 확인만 Phase 0(키 승인 후).**
 - **[개선13] OAuth 응답바디 로깅 누설 ✅(2026-07-18 완료):** 토큰 발급 실패 시 `resp.text`(전체 본문) 대신 표준 OAuth `error`/`error_description`만 노출(비-JSON이면 status만). `auth.py:_oauth_error_detail`. (code-review 2026-07-17 발견)
 - **에지케이스:** 정규장 외 호출·부분체결·잔액부족·네트워크 재시도·환전 미완·크래시 중 부분 리밸런싱
 - **검증:** 각 함수 단위 테스트 (mock 응답) — dry-run 발주계획·멱등키 재현·최소금액 스킵·자금부족 이월 케이스 포함

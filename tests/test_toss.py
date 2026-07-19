@@ -64,6 +64,38 @@ def test_api_error_on_4xx():
     assert ei.value.code == "not-found"
 
 
+# --- 개선11: 401 → 토큰 강제 재발급 후 1회 재시도 ---
+
+def test_request_retries_once_on_401():
+    client = TossClient(_cfg())
+    gt = mock.Mock(return_value="tok")
+    with mock.patch.object(client.tokens, "get_token", gt), \
+         mock.patch.object(client.session, "request",
+                           side_effect=[_resp(401, {"code": "invalid-token"}), _resp(200, {"ok": 1})]) as req:
+        assert client.get("/api/v1/holdings") == {"ok": 1}
+    assert req.call_count == 2                 # 최초 + 재시도 1회
+    gt.assert_any_call(force_refresh=True)     # 재시도 전 토큰 강제 재발급
+
+
+def test_request_401_twice_raises_no_second_retry():
+    client = TossClient(_cfg())
+    with mock.patch.object(client.tokens, "get_token", return_value="tok"), \
+         mock.patch.object(client.session, "request",
+                           side_effect=[_resp(401, {}), _resp(401, {})]) as req:
+        with pytest.raises(TossApiError) as ei:
+            client.get("/api/v1/holdings")
+    assert ei.value.status == 401 and req.call_count == 2   # 재시도 상한 1회
+
+
+def test_request_non_401_error_no_retry():
+    client = TossClient(_cfg())
+    with mock.patch.object(client.tokens, "get_token", return_value="tok"), \
+         mock.patch.object(client.session, "request", side_effect=[_resp(404, {"code": "x"})]) as req:
+        with pytest.raises(TossApiError):
+            client.get("/api/v1/holdings")
+    assert req.call_count == 1                 # 401 아니면 재시도 안 함
+
+
 def test_api_error_non_json_body_not_leaked():
     """개선13 일관: 비-JSON 응답(502 HTML 등) resp.text는 메시지에 덤프 안 됨."""
     client = TossClient(_cfg())

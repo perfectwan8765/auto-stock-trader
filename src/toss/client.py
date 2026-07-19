@@ -42,6 +42,7 @@ class TossClient:
         params: dict | None = None,
         json_body: dict | None = None,
         timeout: int = 15,
+        _retry: bool = False,
     ) -> Any:
         url = f"{self.cfg.base_url}{path}"
         resp = self.session.request(
@@ -53,6 +54,14 @@ class TossClient:
             timeout=timeout,
         )
         self.last_headers = dict(resp.headers)
+        # 개선11: 401(만료 토큰)이면 강제 재발급 후 1회만 재시도(_retry로 상한).
+        # 401은 미처리 거부라 POST /orders 재시도도 안전(clientOrderId 멱등키 이중안전망).
+        if resp.status_code == 401 and not _retry:
+            self.tokens.get_token(force_refresh=True)
+            return self.request(
+                method, path, need_account=need_account, params=params,
+                json_body=json_body, timeout=timeout, _retry=True,
+            )
         try:
             body = resp.json()
         except ValueError:
