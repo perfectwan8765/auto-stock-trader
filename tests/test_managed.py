@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from execution.errors import ExecutionError
 from execution.interface import OrderIntent
 from execution.managed import ManagedState
 from execution.runner import RebalanceRunner
@@ -115,3 +116,28 @@ def test_dry_run_does_not_persist_state(tmp_path):
     RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0,
                     managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=True)
     assert not p.exists()
+
+
+def test_dry_run_does_not_flip_bootstrapped(tmp_path):
+    # F1: dry-run이 state.bootstrapped를 True로 바꾸면 안 됨(같은 객체 라이브 시 보호 무력화 방지).
+    broker = MockBroker(holdings={"TSLA": 10.0})
+    state = ManagedState.load(tmp_path / "s.json")  # bootstrapped=False
+    runner = RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0, managed_state=state)
+    runner.run({"AAPL": 1.0}, "20260716", dry_run=True)
+    assert state.bootstrapped is False          # dry-run 후에도 미부트스트랩
+    # 이어서 같은 객체로 실발주 → 이제 실제 보유로 동결·보호
+    runner.run({"AAPL": 1.0}, "20260716", dry_run=False)
+    assert state.bootstrapped is True and "TSLA" in state.excluded
+    assert all(o.symbol != "TSLA" for o in broker.placed)
+
+
+def test_missing_price_for_held_symbol_aborts():
+    # F2: 봇 보유 종목 가격 누락 → 예산 왜곡·과지출 위험 → 안전 중단.
+    class NoPriceBroker(MockBroker):
+        def get_prices(self, symbols):
+            return {}  # 가격 전부 누락
+    broker = NoPriceBroker(holdings={"NVDA": 3.0})
+    state = ManagedState(managed={"NVDA"}, bootstrapped=True)
+    with pytest.raises(ExecutionError):
+        RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0,
+                        managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=True)

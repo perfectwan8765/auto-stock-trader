@@ -56,7 +56,12 @@ class ManagedState:
         self.bootstrapped = True
 
     def update_after_place(self, orders, placed_ids) -> None:
-        """실발주된 주문만 반영: 매수→M 추가, 전량 매도(exit)→M 제거."""
+        """실발주된 주문만 반영: 매수→M 추가, 전량 매도(exit)→M 제거.
+
+        ⚠️ 시장가 **전량체결 가정**. exit이 부분체결되면 잔량이 계좌에 남는데 M에서 빠져
+        다음 실행에 사용자 종목으로 오인(미완 청산). 정밀 처리는 Phase 0의 주문조회(체결수량)
+        연동 후 (cid별 fill_qty로 M 갱신)로 강화. (code-review 2026-07-18 지적, pre-live 수용)
+        """
         placed = set(placed_ids)
         for o in orders:
             if o.client_order_id not in placed:

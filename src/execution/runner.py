@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .errors import ExecutionError
 from .interface import Broker, RebalanceParams, RebalancePlan
 from .managed import ManagedState
 from .rebalance import compute_rebalance
@@ -47,23 +48,34 @@ class RebalanceRunner:
     def _build_plan(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool) -> RebalancePlan:
         holdings = self.broker.get_holdings()
 
-        # 첫 실행: 현재 보유를 제외셋(X)으로 동결. 영속은 실발주 때만(dry-run은 read-only).
-        if not self.state.bootstrapped:
-            self.state.bootstrap(holdings)
-            if not dry_run:
+        # 제외셋 X·관리셋 M 결정. dry-run은 state를 절대 변경하지 않는다(read-only) —
+        # dry-run이 bootstrapped 플래그를 오염시켜 이후 라이브 보호가 무력화되는 걸 방지(F1).
+        if self.state.bootstrapped:
+            excluded, managed = self.state.excluded, self.state.managed
+        else:
+            excluded = {s for s, q in holdings.items() if q > 0}  # 현재 보유가 곧 X
+            managed = set()                                        # 봇 보유 아직 없음
+            if not dry_run:  # 실발주에서만 X 확정·영속
+                self.state.bootstrap(holdings)
                 self.state.save()
 
         # 목표에서 X 제거(봇은 사용자 수동 보유 종목을 담지 않음)
-        excluded_targets = [s for s in target_weights if s in self.state.excluded]
-        target = {s: w for s, w in target_weights.items() if s not in self.state.excluded}
+        excluded_targets = [s for s in target_weights if s in excluded]
+        target = {s: w for s, w in target_weights.items() if s not in excluded}
 
         # 봇이 관리하는 보유만 리밸 대상 → X 종목은 매도·trim에서 원천 제외
-        bot_holdings = {s: q for s, q in holdings.items() if s in self.state.managed}
+        bot_holdings = {s: q for s, q in holdings.items() if s in managed}
 
         symbols = sorted(set(target) | set(bot_holdings))
         prices = self.broker.get_prices(symbols)
+
+        # 보유 종목 가격 누락 시 예산 계산이 왜곡돼 과지출 위험 → 안전 중단(F2)
+        missing = [s for s in bot_holdings if prices.get(s, 0.0) <= 0]
+        if missing:
+            raise ExecutionError(f"보유 종목 가격 누락 → 예산 계산 불가(안전 중단): {missing}")
+
         account_bp = self.broker.get_buying_power_usd()
-        bot_value = sum(bot_holdings.get(s, 0.0) * prices.get(s, 0.0) for s in bot_holdings)
+        bot_value = sum(bot_holdings[s] * prices[s] for s in bot_holdings)
 
         if self.budget_usd is None:  # 예산 미설정: 봇 보유 + 계좌현금 전체(구 동작)
             total_equity, buying_power = bot_value + account_bp, account_bp
@@ -73,7 +85,11 @@ class RebalanceRunner:
 
         params = RebalanceParams(total_equity, buying_power, self.min_order_usd, rebalance_date)
         plan = compute_rebalance(target, bot_holdings, prices, params)
-        plan.skipped.extend((s, "excluded_manual") for s in excluded_targets)
+        if excluded_targets:  # frozen plan 직접 mutate 대신 재구성(F3)
+            plan = RebalancePlan(
+                orders=plan.orders,
+                skipped=plan.skipped + [(s, "excluded_manual") for s in excluded_targets],
+            )
         return plan
 
     def run(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool = True) -> RunResult:
