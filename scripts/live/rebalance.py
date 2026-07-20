@@ -20,7 +20,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+# 시그널 신선도는 미국 거래일 기준으로 잰다(멱등키와 동일). 정규장이 KST 자정을 넘겨
+# 로컬 날짜가 하루 앞서면 경과일이 왜곡되기 때문.
+US_MARKET_TZ = ZoneInfo("America/New_York")
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
@@ -50,6 +56,12 @@ def _positive_int(v: str) -> int:
     if i <= 0:
         raise argparse.ArgumentTypeError(f"양수여야 함: {v}")
     return i
+
+
+def _signal_age_days(signal_date: str, today: date) -> int:
+    """시그널 날짜(YYYY-MM-DD)로부터 today까지 경과 일수. 미래 날짜는 0으로 취급."""
+    sig = datetime.strptime(signal_date, "%Y-%m-%d").date()
+    return max(0, (today - sig).days)
 
 
 def _latest_signal() -> Path:
@@ -101,6 +113,8 @@ def main() -> None:
     ap.add_argument("--kill-switch", default=str(ROOT / "KILL"), help="이 파일 존재 시 발주 중단")
     ap.add_argument("--max-orders", type=_positive_int, default=60, help="일일 주문건수 상한(서킷브레이커)")
     ap.add_argument("--max-loss", type=_positive_float, default=700.0, help="일일 손실 상한(USD, 손익 배선은 Phase 0)")
+    ap.add_argument("--max-age-days", type=_positive_int, default=5,
+                    help="시그널 최대 허용 경과일(미국 거래일 기준). 초과 시 실발주 거부(dry-run은 경고).")
     ap.add_argument("--confirm", action="store_true", help="실발주. 없으면 dry-run.")
     args = ap.parse_args()
 
@@ -122,6 +136,16 @@ def main() -> None:
     mode = "DRY-RUN(계획만)" if dry_run else "🔴 실발주"
     print(f"시그널: {sig_path.relative_to(ROOT)} (date={sig['date']}, topk={sig['topk']})")
     print(f"모드: {mode} · 예산 ${args.budget} · min ${args.min_order}")
+
+    # 시그널 신선도 가드: 오래된 시그널로 발주 방지(주간 cron에서 파이프라인 실패 시 지난
+    # 시그널 재사용 차단). 실발주는 거부, dry-run은 경고만(계획 검토 허용).
+    age = _signal_age_days(date_raw, datetime.now(US_MARKET_TZ).date())
+    if age > args.max_age_days:
+        warn = (f"시그널 {sig_path.name} 이 {age}일 경과 (> {args.max_age_days}일) "
+                "— 데이터/시그널 파이프라인 실패 가능성.")
+        if not dry_run:
+            raise SystemExit(f"[중단] {warn}\n  최신 시그널 재생성 또는 --max-age-days 조정 후 재실행.")
+        print(f"⚠️ {warn} dry-run이라 계획만 표시.")
 
     res = runner.run(weights, rebalance_date=date, dry_run=dry_run)
     _print_result(res, dry_run)
