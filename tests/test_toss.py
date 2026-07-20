@@ -64,6 +64,19 @@ def test_api_error_on_4xx():
     assert ei.value.code == "not-found"
 
 
+def test_api_error_nested_error_object():
+    """Phase 0 실측: 토스 에러는 {"error":{"code","message","data"}} 중첩."""
+    client = TossClient(_cfg())
+    body = {"error": {"requestId": "abc", "code": "account-not-found",
+                      "message": "해당 계좌번호를 찾을 수 없습니다."}}
+    with mock.patch.object(client.tokens, "get_token", return_value="tok"), \
+         mock.patch.object(client.session, "request", return_value=_resp(400, body)):
+        with pytest.raises(TossApiError) as ei:
+            client.get("/api/v1/holdings")
+    assert ei.value.code == "account-not-found"
+    assert "account-not-found" in str(ei.value)
+
+
 # --- 개선11: 401 → 토큰 강제 재발급 후 1회 재시도 ---
 
 def test_request_retries_once_on_401():
