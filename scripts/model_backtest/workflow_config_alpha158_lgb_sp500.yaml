@@ -56,9 +56,11 @@ port_analysis_config: &port_analysis_config
     benchmark: SPY                 # B3: SPY 대비 초과수익·IR
     exchange_kwargs:
       deal_price: close
-      # 개선2 placeholder 비용(편도 0.40% = 수수료0.10%+환전0.20%+슬리피지0.10%). ⚠️ 실측 아님.
-      open_cost: 0.004
-      close_cost: 0.004
+      # 개선2 비용(편도 0.23% = 수수료0.10%+환전0.03%+슬리피지0.10%).
+      # Phase 0(2026-07-20) 실측 반영: 수수료 ~0.10%(보유 cost.commission), 환전 ~0.03%(FX 스프레드 3bp).
+      # 슬리피지 0.10%는 실체결 없어 하한가정 유지. phase0-findings.md 참고.
+      open_cost: 0.0023
+      close_cost: 0.0023
       min_cost: 0                  # 소수점(fractional)
       trade_unit: null             # 소수점 매수 → 라운드랏 없음
 
