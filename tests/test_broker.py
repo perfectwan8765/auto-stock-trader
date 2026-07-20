@@ -118,6 +118,46 @@ def test_buying_power_bad_value_raises():
         b.get_buying_power_usd()
 
 
+# --- get_sellable_quantity (실측: result.sellableQuantity) ---
+
+def test_sellable_quantity():
+    b = _broker({"/api/v1/sellable-quantity": {"result": {"sellableQuantity": "7.665831"}}})
+    assert b.get_sellable_quantity("AAPL") == 7.665831
+
+
+def test_sellable_missing_is_zero():
+    b = _broker({"/api/v1/sellable-quantity": {"result": {}}})
+    assert b.get_sellable_quantity("AAPL") == 0.0   # 알 수 없으면 보수적 0(매도 안 함)
+
+
+def test_sellable_bad_value_raises():
+    b = _broker({"/api/v1/sellable-quantity": {"result": {"sellableQuantity": "x"}}})
+    with pytest.raises(TossError):
+        b.get_sellable_quantity("AAPL")
+
+
+# --- get_daily_pnl_usd (실측: holdings items[].dailyProfitLoss.amount, 관리셋만 합산) ---
+
+def _holdings_pnl():
+    return {"/api/v1/holdings": {"result": {"items": [
+        {"symbol": "AAPL", "quantity": "1", "dailyProfitLoss": {"amount": "-13.49"}},
+        {"symbol": "TSM", "quantity": "1", "dailyProfitLoss": {"amount": "61.28"}},
+        {"symbol": "NKE", "quantity": "1", "dailyProfitLoss": {"amount": "1.49"}}]}}}
+
+
+def test_daily_pnl_sums_only_managed():
+    b = _broker(_holdings_pnl())
+    assert b.get_daily_pnl_usd({"AAPL"}) == -13.49          # 관리셋 밖(TSM/NKE) 제외
+    assert round(b.get_daily_pnl_usd({"AAPL", "TSM"}), 2) == 47.79
+    assert b.get_daily_pnl_usd(set()) == 0.0                # 관리셋 비면 0
+
+
+def test_daily_pnl_missing_amount_skipped():
+    b = _broker({"/api/v1/holdings": {"result": {"items": [
+        {"symbol": "AAPL", "quantity": "1"}]}}})           # dailyProfitLoss 없음
+    assert b.get_daily_pnl_usd({"AAPL"}) == 0.0
+
+
 # --- is_market_open (실측: isOpen 없음 → regularMarket 시각 비교) ---
 
 _CAL = {"result": {"today": {"regularMarket": {
