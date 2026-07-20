@@ -32,9 +32,12 @@ class TossApiError(TossError):
         self.status = status
         self.body = body
         code, msg = "", ""
-        if isinstance(body, dict):
-            code = body.get("code") or body.get("error") or ""
-            msg = body.get("message") or body.get("error_description") or ""
+        # 토스 에러는 {"error": {"code","message","data"}} 중첩(Phase 0 실측).
+        # 과거 flat {"code",...} 형태도 하위호환으로 함께 지원.
+        payload = body["error"] if isinstance(body, dict) and isinstance(body.get("error"), dict) else body
+        if isinstance(payload, dict):
+            code = payload.get("code") or payload.get("error") or ""
+            msg = payload.get("message") or payload.get("error_description") or ""
         self.code = code
         detail = f" {code}{': ' + msg if msg else ''}".rstrip()
         super().__init__(f"{method} {path} -> {status}{detail}")
