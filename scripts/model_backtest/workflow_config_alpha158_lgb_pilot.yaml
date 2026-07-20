@@ -62,10 +62,11 @@ port_analysis_config: &port_analysis_config
     benchmark: null
     exchange_kwargs:
       deal_price: close
-      # 개선2 placeholder 비용을 편도 코스트로 접기: 수수료0.10%+환전0.20%+슬리피지0.10%=0.40%
-      # ⚠️ 실측 아님. Phase 0 GET /commissions + 환율 실측으로 반드시 교체.
-      open_cost: 0.004
-      close_cost: 0.004
+      # 개선2 비용(편도 0.23% = 수수료0.10%+환전0.03%+슬리피지0.10%).
+      # Phase 0(2026-07-20) 실측 반영: 수수료 ~0.10%·환전 ~0.03%(FX 스프레드). sp500 config와 동일.
+      # (pilot은 ①배선 스모크용 — 엣지 판정은 sp500. phase0-findings.md 참고.)
+      open_cost: 0.0023
+      close_cost: 0.0023
       min_cost: 0                  # 소수점(fractional) → 최소 수수료 없음
       trade_unit: null             # 소수점 매수 → 라운드랏 없음
 
