@@ -23,6 +23,7 @@ def write_order_log(result: RunResult, date: str, out_dir: Path, signal_name: st
         "orders": [asdict(o) for o in result.plan.orders],
         "skipped": [list(s) for s in result.plan.skipped],
         "placed": list(result.placed),
+        "rejected": [list(r) for r in result.rejected],
     }
     path = out_dir / f"rebalance_{date}.json"
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))

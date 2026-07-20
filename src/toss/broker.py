@@ -100,6 +100,32 @@ class TossBroker:
             return 0.0  # 알 수 없으면 보수적 0 (매수 안 함)
         return _num(result["cashBuyingPower"], "buying-power.cashBuyingPower")
 
+    def get_sellable_quantity(self, symbol: str) -> float:
+        # T+N 미결제분을 제외한 실제 매도가능수량. 보유수량과 다를 수 있어 매도 상한으로 쓴다.
+        resp = self.client.get("/api/v1/sellable-quantity", params={"symbol": symbol})
+        result = _result(resp)
+        if not isinstance(result, dict) or result.get("sellableQuantity") is None:
+            return 0.0  # 알 수 없으면 보수적 0 (매도 안 함)
+        return _num(result["sellableQuantity"], "sellable-quantity.sellableQuantity")
+
+    def get_daily_pnl_usd(self, symbols: set[str]) -> float:
+        """holdings 응답의 종목별 당일손익(dailyProfitLoss.amount) 합. 음수=손실.
+        symbols(봇 관리셋 M)에 속한 항목만 합산 → 사용자 수동 보유(X)는 손실상한에서 제외."""
+        result = _result(self.client.get("/api/v1/holdings"))
+        if not isinstance(result, dict):
+            raise TossError(f"[응답 파싱] holdings 예상 밖 형태: {type(result).__name__}")
+        items = result.get("items", [])
+        if not isinstance(items, list):
+            raise TossError("[응답 파싱] holdings.items가 리스트가 아님")
+        total = 0.0
+        for it in items:
+            if it.get("symbol") not in symbols:
+                continue
+            amount = (it.get("dailyProfitLoss") or {}).get("amount")
+            if amount is not None:
+                total += _num(amount, "holdings.dailyProfitLoss.amount")
+        return total
+
     def is_market_open(self) -> bool:
         resp = self.client.get("/api/v1/market-calendar/US", need_account=False)
         return _regular_market_open(resp, datetime.now(timezone.utc))

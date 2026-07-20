@@ -25,6 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
+from execution.errors import ExecutionError  # noqa: E402
 from execution.managed import ManagedState  # noqa: E402
 from execution.runner import RebalanceRunner  # noqa: E402
 from execution.safety import CircuitBreaker  # noqa: E402
@@ -87,6 +88,8 @@ def _print_result(res, dry_run: bool) -> None:
           f"스킵 {len(res.plan.skipped)}, 발주 {len(res.placed)}")
     if res.plan.skipped:
         print(f"  스킵: {res.plan.skipped}")
+    if res.rejected:
+        print(f"  거부(개별): {res.rejected}")
 
 
 def main() -> None:
@@ -128,10 +131,11 @@ def main() -> None:
 
 
 def _cli() -> None:
-    """CLI 경계: 라이브러리 TossError를 clean 메시지·exit로 변환(개선10)."""
+    """CLI 경계: 라이브러리 예외(TossError·ExecutionError)를 clean 메시지·exit로 변환(개선10).
+    서킷브레이커·kill switch(ExecutionError)도 traceback 없이 정지 메시지로."""
     try:
         main()
-    except TossError as e:
+    except (TossError, ExecutionError) as e:
         raise SystemExit(str(e))
 
 
