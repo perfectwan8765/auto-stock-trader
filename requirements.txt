@@ -13,6 +13,11 @@ lightgbm==4.6.0
 xgboost==3.2.0
 scikit-learn==1.7.2
 
+# --- DL 실험(Phase 3 모델 비교: Alpha360 + GRU 등) ---
+# qlib pytorch 모델용. macOS는 torch↔lightgbm OpenMP 충돌로 무음 크래시 →
+# 실행 시 OMP_NUM_THREADS=1 필수 (run_experiment.py 참고).
+torch==2.13.0
+
 # --- 토스 어댑터(Phase 0·5) ---
 requests>=2.31,<3
 python-dotenv>=1.0,<2
