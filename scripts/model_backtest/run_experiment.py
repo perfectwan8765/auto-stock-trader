@@ -22,9 +22,12 @@ from run_backtest import _ensure_tradable_instruments
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
+    ap.add_argument("--seed", type=int, default=None, help="모델 시드 오버라이드(다중시드 비교용)")
     args = ap.parse_args()
 
     cfg, cfg_path = load_config(args.config)
+    if args.seed is not None:
+        cfg["task"]["model"]["kwargs"]["seed"] = args.seed
     init_kwargs, provider_uri = qlib_init_kwargs(cfg)
     market = cfg["task"]["dataset"]["kwargs"]["handler"]["kwargs"]["instruments"]
     benchmark = cfg["port_analysis_config"]["backtest"].get("benchmark")
@@ -49,10 +52,18 @@ def main() -> None:
         risk = rec.load_object("portfolio_analysis/port_analysis_1week.pkl")
         feat = dataset.prepare("test", col_set="feature")
 
+        seed = cfg["task"]["model"]["kwargs"].get("seed")
+        exc = risk.loc[("excess_return_with_cost", "annualized_return"), "risk"]
+        ir = risk.loc[("excess_return_with_cost", "information_ratio"), "risk"]
+        mdd = risk.loc[("excess_return_with_cost", "max_drawdown"), "risk"]
+
         print("\n" + "=" * 60)
         print(f"피처 수: {feat.shape[1]}")
         print(f"IC={ic.mean():.4f}  RankIC={ric.mean():.4f}")
         print(risk)
+        # 다중시드 집계용 파싱 라인
+        print(f"SUMMARY | seed={seed} | IC={ic.mean():.4f} | RankIC={ric.mean():.4f} "
+              f"| exc_wc={exc:.4f} | IR_wc={ir:.4f} | MDD_wc={mdd:.4f}")
 
 
 if __name__ == "__main__":
