@@ -1,0 +1,88 @@
+# 실험 A — Alpha360 + GRU, 약세장(2022) 포함 아웃오브샘플 재판정
+#
+# 목적: 2023~2026(불장) test에서 나온 GRU 초과 +12%가 "진짜 종목선택 알파"인지
+# "불장 모멘텀/베타 틸트"인지 판별. test를 2021.7~2022.12(2022 약세장, SPY ~-18%)로 이동.
+#   - 여기서도 SPY 초과면 → 방어적/선택 알파 신빙성↑
+#   - 초과 붕괴/음수면 → 불장 한정 틸트(진짜 우위 아님) 확정
+# 베이스라인/기존 GRU와 라벨·비용·주간·모델은 동일, 구간(segments/backtest)만 이동.
+
+qlib_init:
+  provider_uri: data/qlib_us
+  region: us
+
+market: sp500
+benchmark: SPY
+
+data_handler_config: &data_handler_config
+  start_time: 2015-01-02
+  end_time: 2022-12-31
+  fit_start_time: 2015-01-02
+  fit_end_time: 2020-06-30      # 정규화 통계는 train 구간만
+  instruments: sp500
+  label: [["Ref($close, -6)/Ref($close, -1) - 1"], ["LABEL0"]]
+  infer_processors:
+    - class: RobustZScoreNorm
+      kwargs: {fields_group: feature, clip_outlier: true}
+    - class: Fillna
+      kwargs: {fields_group: feature}
+  learn_processors:
+    - class: DropnaLabel
+    - class: CSRankNorm
+      kwargs: {fields_group: label}
+
+port_analysis_config: &port_analysis_config
+  executor:
+    class: SimulatorExecutor
+    module_path: qlib.backtest.executor
+    kwargs:
+      time_per_step: week
+      generate_portfolio_metrics: true
+  strategy:
+    class: TopkDropoutStrategy
+    module_path: qlib.contrib.strategy
+    kwargs:
+      signal: <PRED>
+      topk: 20
+      n_drop: 5
+  backtest:
+    start_time: 2021-07-01
+    end_time: 2022-12-15         # 라벨 오버플로 버퍼(-2wk)
+    account: 700
+    benchmark: SPY
+    exchange_kwargs:
+      deal_price: close
+      open_cost: 0.0023
+      close_cost: 0.0023
+      min_cost: 0
+      trade_unit: null
+
+task:
+  model:
+    class: GRU
+    module_path: qlib.contrib.model.pytorch_gru
+    kwargs:
+      d_feat: 6
+      hidden_size: 64
+      num_layers: 2
+      dropout: 0.0
+      n_epochs: 20
+      lr: 0.001
+      early_stop: 10
+      batch_size: 2000
+      metric: loss
+      loss: mse
+      n_jobs: 8
+      GPU: 0
+      seed: 2026
+  dataset:
+    class: DatasetH
+    module_path: qlib.data.dataset
+    kwargs:
+      handler:
+        class: Alpha360
+        module_path: qlib.contrib.data.handler
+        kwargs: *data_handler_config
+      segments:
+        train: [2015-01-02, 2020-06-30]
+        valid: [2020-07-01, 2021-06-30]
+        test:  [2021-07-01, 2022-12-31]
