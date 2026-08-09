@@ -1,6 +1,6 @@
 """TossBroker 응답 파싱·발주 body 단위테스트 (StubClient — 실 API 불요).
 
-응답 필드는 Phase 0(2026-07-20) 실측 구조로 고정 — phase0-findings.md 참고.
+응답 필드는 Phase 0(2026-07-20) 실측 구조로 고정 — 이 픽스처가 토스 응답 계약의 원천이다.
 공통 래퍼 `{"result": ...}` 해제, market-calendar는 시각 비교로 개장 판정.
 """
 from __future__ import annotations

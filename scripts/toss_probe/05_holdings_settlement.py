@@ -29,7 +29,7 @@ def main() -> None:
     bp = client.get("/api/v1/buying-power")
     print(json.dumps(bp, indent=2, ensure_ascii=False))
     print(
-        "\n👉 매도 후 이 스크립트를 매일 실행하며 USD 가용액 증가 시점을 phase0-findings.md에 기록."
+        "\n👉 매도 후 매일 실행해 USD 가용액 증가 시점 확인 (실측 확정: T+2)."
         "\n   (매도일 대비 며칠 뒤 반영되는지 = 미국주식 결제주기 T+N)"
     )
 

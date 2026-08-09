@@ -265,17 +265,21 @@ scripts/toss_probe/       Phase 0 실측 툴킷 (키 발급 후 순서대로 실
 scripts/data_pipeline/    Phase 2 데이터 파이프라인 (수집→정규화→dump→검증)
 scripts/model_backtest/   Phase 3~4 학습·백테스트·시그널·dry-run (config 구동)
 scripts/live/             실 발주 진입점 (dry-run 기본, --confirm 실발주) — Phase 0 키 필요
+scripts/dashboard/        백테스트·주문로그 뷰어 (`streamlit run scripts/dashboard/app.py`)
 tests/             단위테스트 (pytest) — toss·rebalance·safety·runner·managed·broker·live
-universe/          유니버스 티커 리스트 (S&P500 전체 + 파일럿)
+universe/          유니버스 티커 리스트 (S&P500 전체·파일럿, 마이크로캡 후보·거래가능)
 vendor/            외부 원본 파일 (qlib dump_bin.py) — 수정 금지
+.streamlit/        대시보드 테마 (Streamlit이 자동으로 읽음)
 data/, signals/    (gitignore) 생성물
-qlib-toss.md       전체 작업계획서 (Phase 0~7·개선N·API 스펙·의사결정)
+qlib-toss.md       전체 작업계획서 (Phase 0~7·개선N·API 스펙·의사결정·Phase 0 실측 상수)
+ledger-design.md   실집행 원장(SQLite) 설계 — 구현은 Phase 0
 requirements.txt   의존성 핀 (재현용)
 ```
 
 ## 보안
 
 - 자격증명은 **`.env`에서만** 읽으며 코드/저장소에 넣지 않는다 (`.env.example` 참고).
-- `.env`, `.cache/`(토큰), `phase0-findings.md`(계좌식별자)는 `.gitignore`로 커밋 차단.
+- `.env`, `.cache/`(토큰), `phase0b-execution-gate.md`(계좌 고유 실측값)는 `.gitignore`로 커밋 차단.
+- 실측 결과 중 **계정 무관한 API 계약·비용만** `qlib-toss.md` §Phase 0 실측 상수에 남긴다. 계좌번호·잔액·보유 종목은 커밋하지 않고 API 재조회로 얻는다.
 - 저장소는 **Private** 권장.
 - **계좌 공유 안전**: 토스 계좌를 사용자 수동 보유와 공유하므로, 봇은 **자기가 산 종목(관리셋)·설정 예산 안에서만** 매매한다. 사용자가 직접 산 종목·현금은 건드리지 않는다(화이트리스트, 개선14).

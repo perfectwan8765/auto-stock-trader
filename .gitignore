@@ -8,8 +8,9 @@
 .cache/
 .toss_token.json
 
-# Phase 0 실측 결과(계좌식별자 등 민감정보 포함 가능) — 필요 시 수동으로 커밋
-phase0-findings.md
+# 실측 결과 원본(계좌식별자·잔액·보유 등 민감정보 포함 가능) — 커밋 금지.
+# 계정 무관한 API 계약·비용만 추려 qlib-toss.md §Phase 0 실측 상수에 남긴다.
+phase0b-execution-gate.md
 
 # python
 .venv/
@@ -29,6 +30,9 @@ execution_logs/
 
 # 작업계획서(로컬 전용, 추적 안 함)
 docs/
+
+# 에이전트 지침(로컬 전용)
+CLAUDE.md
 
 # OS/IDE
 .DS_Store

@@ -31,7 +31,7 @@ def main() -> None:
         print(f"   조회 실패: {e}")
 
     print(
-        "\n👉 result.cashBuyingPower 확인해 phase0-findings.md에 기록:"
+        "\n👉 result.cashBuyingPower 확인:"
         "\n   - USD>0 노출 → 자동환전(통합증거금) 가정"
         "\n   - USD 0 / KRW만 → 선환전 필요 (실측 결과가 이 케이스)"
     )

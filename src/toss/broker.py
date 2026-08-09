@@ -1,7 +1,7 @@
 """TossBroker — execution.interface.Broker의 토스 구체 구현(transport glue).
 
 TossClient(HTTP)를 감싸 리밸런싱 로직에 브로커 능력을 제공한다.
-응답 필드는 Phase 0(2026-07-20) 실측으로 확정 — phase0-findings.md "응답 필드 실측" 참고.
+응답 필드는 Phase 0(2026-07-20) 실측으로 확정 — 구조는 tests/test_broker.py 픽스처가 고정한다.
 공통 래퍼 `{"result": ...}`를 해제하고, market-calendar는 isOpen 필드가 없어 정규장
 시각([start,end)) 비교로 개장을 판정한다.
 
