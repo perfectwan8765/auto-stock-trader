@@ -27,6 +27,9 @@ signals/
 # 리밸런싱 주문로그(dry-run·실발주 산출물)
 execution_logs/
 
+# 작업계획서(로컬 전용, 추적 안 함)
+docs/
+
 # OS/IDE
 .DS_Store
 .vscode/
