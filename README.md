@@ -226,9 +226,27 @@ Rank IC 0.012는 여전히 modest → 종목선택 알파라기보다 **모멘�
 
 같은 GRU가 불장에선 SPY +12%, 약세장에선 **SPY -21%·MDD ~-49%**로 완전히 뒤집힌다. IC/RankIC도 약세장에선 음수/0. → **진짜 종목선택 알파가 아니라 고베타·모멘텀 집중 틸트로 확정.** 불장엔 SPY보다 공격적이라 더 먹고, 약세장엔 더 크게 깨진다. 앞선 +11.9%는 (생존편향까지 겹쳐) 실전 우위가 아니다.
 
-**최종 판정**: Alpha158/Alpha360 · LightGBM/GRU 모두 미국 대형주 주간에서 **exploitable 엣지 미검출**. GRU의 불장 초과는 레짐 의존 틸트로 확인. 병목은 모델이 아니라 시장·신호·데이터다. 실매매는 SPY 보유가 합리적이며, 이 저장소의 가치는 예측·백테스트·안전한 자동발주 파이프라인의 **학습·검증**에 있다.
+### CAPM 분해 (beta 중립) — 틸트 정량 확정
 
-재현(약세장): `OMP_NUM_THREADS=1 python scripts/model_backtest/run_experiment.py --config workflow_config_alpha360_gru_bear2022.yaml --seed 2026`
+"SPY 대비 초과"를 beta 틸트 vs 진짜 alpha로 분리: 비용후 전략수익을 SPY에 회귀(`y = alpha + beta·bench`).
+
+| 구간 | beta | alpha(연, beta중립) | 해석 |
+|------|:---:|:---:|------|
+| GRU 불장 2023~26 (4시드) | 1.48~1.69 | **-2.9 ~ +2.9%** (≈0) | 초과는 β≈1.5가 시장을 배수로 탄 것 |
+| GRU 약세장 2022 (2시드) | 1.56~1.60 | **-18.6 ~ -20.4%** | 고베타가 하락장에 증폭·alpha도 음수 |
+| Alpha158+LightGBM | 1.24 | -11 ~ -15% | beta 낮으나 alpha 음수 |
+
+→ **beta를 벗기면 alpha ≈ 0(불장)·강한 음수(약세장).** 즉 GRU의 +12%는 selection alpha가 아니라 **β≈1.5 레버리지 베팅**이 불장에 먹은 것. 약세장엔 그대로 토해낸다.
+
+**최종 판정**: Alpha158/Alpha360 · LightGBM/GRU 모두 미국 대형주 주간에서 **exploitable selection alpha 미검출**(beta 중립 후 ~0/음수). 초과의 정체는 고베타 틸트. 병목은 모델이 아니라 시장·신호·데이터다. 실매매는 SPY(또는 small-cap value ETF) 보유가 합리적이며, 이 저장소의 가치는 예측·백테스트·안전한 자동발주 파이프라인의 **학습·검증**에 있다.
+
+재현:
+```bash
+# 약세장 재판정
+OMP_NUM_THREADS=1 python scripts/model_backtest/run_experiment.py --config workflow_config_alpha360_gru_bear2022.yaml --seed 2026
+# CAPM beta/alpha 분해 (mlruns report → 회귀)
+python scripts/model_backtest/analyze_capm.py
+```
 
 재현:
 ```bash
