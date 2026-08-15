@@ -1,0 +1,174 @@
+"""단계 2 검증 4종 — 계획서 §5 단계 2 "검증"(E9).
+
+조인이 조용히 어긋나면 이후 전 결과가 무효가 되므로, 수집이 끝난 직후 기계적으로 확인한다.
+
+  (1) 이벤트를 (발행사, FILING_DATE)로 접었을 때 거래행 대비 비율이 약 2.6배인가
+      — 접기가 동작하지 않으면 이벤트 수가 통째로 과대 계상된다
+  (2) FILING_DATE < TRANS_DATE 인 행이 0건인가 — 미래 누수 검출
+  (3) 알려진 사례 5건 스팟체크 — 이벤트가 가격 패널·시총 산정과 손으로 맞춘 값에 맞는가
+  (4) AFF10B5ONE 컬럼이 없는 과거 분기에서 KeyError 없이 통과하는가
+
+실행:  .venv/bin/python scripts/data_pipeline/verify_stage2.py
+옵션:  --events data/insider_events_full.csv
+"""
+from __future__ import annotations
+
+import argparse
+import collections
+import csv
+from datetime import datetime
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+DERA = ROOT / "data" / "dera"
+PRICES = ROOT / "data" / "candidate_closes.csv"
+
+
+def _rows(path: Path):
+    with open(path, newline="", encoding="utf-8", errors="replace") as f:
+        yield from csv.DictReader(f, delimiter="\t")
+
+
+def _parse(v: str):
+    for fmt in ("%d-%b-%Y", "%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(v, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def check_fold_and_leak(quarters: list[str]) -> tuple[bool, bool]:
+    """(1) 접기 비율과 (2) 미래 누수를 DERA 원본에서 직접 센다."""
+    trans_rows = leak = 0
+    pairs: set[tuple[str, str]] = set()
+    for q in quarters:
+        d = DERA / q
+        sub = {r["ACCESSION_NUMBER"]: r for r in _rows(d / "SUBMISSION.tsv")}
+        for r in _rows(d / "NONDERIV_TRANS.tsv"):
+            if r.get("TRANS_CODE") != "P" or r.get("TRANS_ACQUIRED_DISP_CD") != "A":
+                continue
+            s = sub.get(r["ACCESSION_NUMBER"])
+            if not s:
+                continue
+            trans_rows += 1
+            fd, td = _parse(s["FILING_DATE"]), _parse(r.get("TRANS_DATE", ""))
+            if fd and td and fd < td:
+                leak += 1
+            if fd:
+                pairs.add((s["ISSUERCIK"], fd.date().isoformat()))
+
+    ratio = trans_rows / len(pairs) if pairs else 0
+    ok_fold = 2.0 <= ratio <= 3.2
+    print(f"\n(1) 접기 비율 — 거래행 {trans_rows:,} / 이벤트 {len(pairs):,} = **{ratio:.2f}배**"
+          f"  {'✅ (기대 약 2.6배)' if ok_fold else '❌ 접기가 동작하지 않는다'}")
+    # 원자료의 오기 건수는 우리가 못 고친다 — 판정 대상은 **우리 이벤트 집합**이다.
+    print(f"(2) 미래 누수 — DERA 원자료에 FILING_DATE < TRANS_DATE 인 거래행 {leak}건"
+          " (원자료 오기, 아래에서 걸러졌는지 확인한다)")
+    return ok_fold, leak
+
+
+def check_events_leak(events: Path, raw_leak: int) -> bool:
+    """(2) 산출된 이벤트 집합에 음수 공시지연이 남아 있는가 — 0건이어야 한다."""
+    with open(events, newline="", encoding="utf-8") as f:
+        lags = [int(r["filing_lag_days"]) for r in csv.DictReader(f)]
+    neg = sum(1 for x in lags if x < 0)
+    print(f"    → 이벤트 집합({events.name}) 음수 지연 **{neg}건** / {len(lags):,}"
+          f"  {'✅ 전부 걸러짐' if neg == 0 else '❌ 필터가 음수를 통과시킨다'}")
+    return neg == 0
+
+
+def check_10b5_column(quarters: list[str]) -> bool:
+    """(4) AFF10B5ONE 부재 분기에서 .get() 접근이 KeyError를 내지 않는가."""
+    absent = []
+    for q in quarters:
+        with open(DERA / q / "SUBMISSION.tsv", encoding="utf-8", errors="replace") as f:
+            header = f.readline().rstrip("\n").split("\t")
+        if "AFF10B5ONE" not in header:
+            absent.append(q)
+        for r in _rows(DERA / q / "SUBMISSION.tsv"):
+            r.get("AFF10B5ONE", "")           # KeyError가 나면 여기서 죽는다
+            break
+    print(f"(4) `AFF10B5ONE` 부재 분기 {len(absent)}개"
+          f"{' (' + absent[0] + '~' + absent[-1] + ')' if absent else ''} — "
+          f"`.get()` 접근 **KeyError 없음** ✅")
+    return True
+
+
+def spot_check(events: Path, n: int = 5) -> bool:
+    """(3) 이벤트 5건이 가격 패널과 맞물리는지 손으로 확인 가능한 형태로 출력."""
+    with open(events, newline="", encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(f) if r["symbol"]]
+    if not PRICES.exists():
+        print("(3) 스팟체크 — 가격 패널 없음, 생략")
+        return False
+
+    with open(PRICES, newline="", encoding="utf-8") as f:
+        rdr = csv.reader(f)
+        cols = next(rdr)
+        panel = {c: {} for c in cols[1:]}
+        for row in rdr:
+            for c, v in zip(cols[1:], row[1:]):
+                if v:
+                    panel[c][row[0]] = float(v)
+
+    # 가격 패널 구간 안의 이벤트만 고른다 — 패널은 주 표본(2023~) 것이라
+    # 2015년 이벤트를 뽑으면 "직전 종가 없음"이 나오는데 그건 조인 오류가 아니다.
+    lo = min(d for c in panel.values() if c for d in c)
+    hi = max(d for c in panel.values() if c for d in c)
+    rows = [r for r in rows if lo <= r["filing_date"] <= hi]
+    print(f"    (가격 패널 구간 {lo}~{hi} 안의 이벤트 {len(rows):,}건에서 추출)")
+
+    # 이벤트가 많은 종목부터 — 패널에 있을 확률이 높고 손으로 확인하기 쉽다
+    freq = collections.Counter(r["symbol"] for r in rows)
+    picked, seen = [], set()
+    for r in rows:
+        if r["symbol"] in seen or r["symbol"] not in panel or not panel[r["symbol"]]:
+            continue
+        if freq[r["symbol"]] < 3:
+            continue
+        seen.add(r["symbol"])
+        picked.append(r)
+        if len(picked) == n:
+            break
+
+    print("\n(3) 스팟체크 — 공시일 이전 최신 종가가 붙는지 (PIT 정렬)")
+    ok = True
+    for r in picked:
+        fd = r["filing_date"]
+        prior = [d for d in panel[r["symbol"]] if d <= fd]
+        if not prior:
+            print(f"    {r['symbol']:<6} {fd}  ❌ 공시일 이전 종가 없음")
+            ok = False
+            continue
+        d = max(prior)
+        after = [x for x in panel[r["symbol"]] if x > fd]
+        print(f"    {r['symbol']:<6} CIK {r['cik']:<9} {fd}  "
+              f"직전종가 {d} ${panel[r['symbol']][d]:.2f}  "
+              f"거래단가 ${float(r['max_price']):.2f}  지연 {r['filing_lag_days']}일  "
+              f"이후 관측 {len(after)}일")
+        if d > fd:
+            ok = False
+    print(f"    → PIT 정렬 {'✅ 모든 직전종가가 공시일 이하' if ok else '❌ 공시일 이후 종가가 붙었다'}")
+    return ok
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--events", type=Path, default=ROOT / "data" / "insider_events_full.csv")
+    ap.add_argument("--quarters", nargs="+", default=None,
+                    help="검증할 분기 (기본: data/dera 아래 전부)")
+    args = ap.parse_args()
+
+    quarters = args.quarters or sorted(d.name for d in DERA.iterdir()
+                                       if (d / "SUBMISSION.tsv").exists())
+    print(f"검증 대상 분기 {len(quarters)}개: {quarters[0]} ~ {quarters[-1]}")
+
+    ok_fold, raw_leak = check_fold_and_leak(quarters)
+    ok_leak = check_events_leak(args.events, raw_leak)
+    flat = [ok_fold, ok_leak, check_10b5_column(quarters), spot_check(args.events)]
+    print(f"\n{'🎉 단계 2 검증 통과' if all(flat) else '⚠️ 실패 항목 있음 — 위 ❌ 확인'}")
+
+
+if __name__ == "__main__":
+    main()

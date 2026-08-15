@@ -138,7 +138,11 @@ def collect(quarters: list[str]) -> tuple[collections.Counter, collections.Count
     pair_events: collections.Counter = collections.Counter()
     rows: list[tuple] = []
     for (cik, ticker, filing_date), (amount, price, lag) in sorted(raw.items(), key=lambda x: x[0][2]):
-        if amount < MIN_AMOUNT_USD or not (MIN_PRICE <= price <= MAX_PRICE) or lag > MAX_FILING_LAG_DAYS:
+        # 지연 하한 0 필수 — DERA에 TRANS_DATE > FILING_DATE 인 오기가 있고(주 표본 7건),
+        # `lag > MAX`만 보면 음수가 통과한다. 거래단가가 공시 이후 거래의 것이 되어
+        # 선택 규칙(price deviation)이 오염되고 단계 2 검증("미래 누수 0건")을 위반한다.
+        if amount < MIN_AMOUNT_USD or not (MIN_PRICE <= price <= MAX_PRICE) \
+                or not (0 <= lag <= MAX_FILING_LAG_DAYS):
             continue
         events[ticker] += 1
         pair_events[(ticker, cik)] += 1
@@ -147,10 +151,20 @@ def collect(quarters: list[str]) -> tuple[collections.Counter, collections.Count
     return events, stats, pair_events, rows
 
 
+def _tagged(path: Path, tag: str) -> Path:
+    return path if not tag else path.with_name(f"{path.stem}{tag}{path.suffix}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quarters", nargs="+", default=DEFAULT_QUARTERS)
+    # 단계 2(45분기 전량)가 단계 1의 주 표본 산출물을 덮으면 사전등록 근거가 사라진다.
+    ap.add_argument("--out-tag", default="",
+                    help="산출 파일명 접미사. 예: --out-tag _full → insider_events_full.csv")
     args = ap.parse_args()
+    out = _tagged(OUT, args.out_tag)
+    out_csv = _tagged(OUT_CSV, args.out_tag)
+    out_events = _tagged(OUT_EVENTS, args.out_tag)
 
     events, stats, pair_events, event_rows = collect(args.quarters)
     if not events:
@@ -162,8 +176,8 @@ def main() -> None:
     print(f"  {'후보 티커':24s} {len(events):>8,}")
 
     symbols = [t for t, _ in events.most_common()]  # 이벤트 많은 종목부터
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text("\n".join([
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join([
         f"# 마이크로캡 후보 — SEC DERA {args.quarters[0]}~{args.quarters[-1]} 내부자 공개시장 매수(P) 발행사.",
         f"# 필터: 금액>=${MIN_AMOUNT_USD:,} · ${MIN_PRICE:g}<=주가<=${MAX_PRICE:g} · 공시지연<={MAX_FILING_LAG_DAYS}일 · 10b5-1 제외.",
         f"# {len(events)}종목 / 필터통과 이벤트 {sum(events.values()):,}건. 이벤트 많은 순.",
@@ -171,7 +185,7 @@ def main() -> None:
         *symbols,
     ]) + "\n")
 
-    with open(OUT_CSV, "w", newline="", encoding="utf-8") as f:
+    with open(out_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["symbol", "cik", "events"])
         w.writerows([(s, c, n) for (s, c), n in pair_events.most_common()])
@@ -181,13 +195,13 @@ def main() -> None:
     if n_dup:
         print(f"  ⚠️ 복수 CIK 티커 {n_dup}건 — 가격은 티커로만 조회되므로 시총 산정 시 UNKNOWN 처리됨")
 
-    OUT_EVENTS.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUT_EVENTS, "w", newline="", encoding="utf-8") as f:
+    out_events.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_events, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["symbol", "cik", "filing_date", "amount_usd", "max_price", "filing_lag_days"])
         w.writerows(event_rows)
 
-    print(f"\n[완료] {OUT.relative_to(ROOT)} · {OUT_CSV.relative_to(ROOT)} · {OUT_EVENTS.relative_to(ROOT)}")
+    print(f"\n[완료] {out.relative_to(ROOT)} · {out_csv.relative_to(ROOT)} · {out_events.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

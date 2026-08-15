@@ -1,6 +1,6 @@
 # 마이크로캡 후보 — SEC DERA 2023q1~2026q1 내부자 공개시장 매수(P) 발행사.
 # 필터: 금액>=$10,000 · $5<=주가<=$50 · 공시지연<=5일 · 10b5-1 제외.
-# 2432종목 / 필터통과 이벤트 14,143건. 이벤트 많은 순.
+# 2432종목 / 필터통과 이벤트 14,136건. 이벤트 많은 순.
 # gen_microcap_candidates.py로 재생성. Toss 취급 여부는 06_microcap_coverage.py로 별도 확인.
 ECAT
 BIGZ
@@ -93,7 +93,6 @@ QRHC
 NBBK
 REFLX
 BY
-UBFO
 TBBK
 DLHC
 BSBK
@@ -103,6 +102,7 @@ AMH
 WLKP
 KYN
 JYNT
+UBFO
 HLF
 ABR
 JMSB
@@ -333,7 +333,6 @@ OPOF
 AVDL
 EGBN
 PMTS
-RMCF
 NTST
 AAOI
 MIRM
@@ -371,6 +370,7 @@ CZR
 TFIN
 DCOM
 FCPT
+RMCF
 GRND
 ACIC
 VVV
@@ -623,7 +623,6 @@ SGC
 PFIS
 CAPL
 PRAA
-AKRO
 OPAL
 HNNA
 KRO
@@ -760,6 +759,7 @@ GTN
 IGMS
 KGS
 JANX
+AKRO
 SHYF
 MNRO
 THR
@@ -1121,7 +1121,6 @@ ONB
 HBNC
 MORF
 VIRT
-HAFC
 SSBK
 MLKN
 HONE
@@ -1226,7 +1225,6 @@ ST
 PK
 USAC
 KMT
-VSH
 LSAK
 GHLD
 CMTG
@@ -1377,6 +1375,7 @@ CARE
 BSRR
 CNA
 FCBC
+HAFC
 PAGP
 INDB
 AMAL
@@ -1508,7 +1507,6 @@ GDOT
 PCT
 GEO
 ALXO
-RZLT
 NEA
 NKTX
 OTLK
@@ -1623,6 +1621,7 @@ FERLX
 IOR
 HCWB
 CARS
+VSH
 NRC
 COLD
 VTRS
@@ -2002,6 +2001,7 @@ SKYE
 VICI
 FECOF
 AKR
+RZLT
 ARWR
 ALAB
 PPBI
