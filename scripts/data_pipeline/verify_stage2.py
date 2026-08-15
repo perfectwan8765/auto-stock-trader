@@ -17,6 +17,8 @@ import argparse
 import collections
 import csv
 from datetime import datetime
+
+import pandas as pd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,7 +40,7 @@ def _parse(v: str):
     return None
 
 
-def check_fold_and_leak(quarters: list[str]) -> tuple[bool, bool]:
+def check_fold_and_leak(quarters: list[str]) -> tuple[bool, int]:
     """(1) 접기 비율과 (2) 미래 누수를 DERA 원본에서 직접 센다."""
     trans_rows = leak = 0
     pairs: set[tuple[str, str]] = set()
@@ -68,7 +70,7 @@ def check_fold_and_leak(quarters: list[str]) -> tuple[bool, bool]:
     return ok_fold, leak
 
 
-def check_events_leak(events: Path, raw_leak: int) -> bool:
+def check_events_leak(events: Path) -> bool:
     """(2) 산출된 이벤트 집합에 음수 공시지연이 남아 있는가 — 0건이어야 한다."""
     with open(events, newline="", encoding="utf-8") as f:
         lags = [int(r["filing_lag_days"]) for r in csv.DictReader(f)]
@@ -86,13 +88,18 @@ def check_10b5_column(quarters: list[str]) -> bool:
             header = f.readline().rstrip("\n").split("\t")
         if "AFF10B5ONE" not in header:
             absent.append(q)
-        for r in _rows(DERA / q / "SUBMISSION.tsv"):
-            r.get("AFF10B5ONE", "")           # KeyError가 나면 여기서 죽는다
-            break
-    print(f"(4) `AFF10B5ONE` 부재 분기 {len(absent)}개"
-          f"{' (' + absent[0] + '~' + absent[-1] + ')' if absent else ''} — "
-          f"`.get()` 접근 **KeyError 없음** ✅")
-    return True
+    # 부재 분기에서 실제로 필터가 꺼지는가 — 값이 있는 분기에는 1(=10b5-1)이 존재해야 한다
+    flagged = {}
+    for q in quarters:
+        vals = {r.get("AFF10B5ONE", "") for r in _rows(DERA / q / "SUBMISSION.tsv")}
+        flagged[q] = "1" in vals
+    present = [q for q in quarters if q not in absent]
+    ok = all(not flagged[q] for q in absent) and any(flagged[q] for q in present)
+    print(f"(4) `AFF10B5ONE` — 부재 {len(absent)}분기"
+          f"{' (' + absent[0] + '~' + absent[-1] + ')' if absent else ''}"
+          f" · 존재 {len(present)}분기 중 플래그 관측 {sum(flagged[q] for q in present)}분기"
+          f"  {'✅' if ok else '❌ 부재 분기에서 플래그가 관측되거나 존재 분기에서 전무하다'}")
+    return ok
 
 
 def spot_check(events: Path, n: int = 5) -> bool:
@@ -143,13 +150,23 @@ def spot_check(events: Path, n: int = 5) -> bool:
             continue
         d = max(prior)
         after = [x for x in panel[r["symbol"]] if x > fd]
+        # 실제 검사 3종 — `d <= fd`는 prior 구성상 자명하므로 단언 대상이 아니다.
+        gap = (pd.Timestamp(fd) - pd.Timestamp(d)).days
+        lag = int(r["filing_lag_days"])
+        bad = []
+        if gap > 7:                       # 직전 거래일이 일주일 넘게 떨어져 있으면 조인 의심
+            bad.append(f"직전종가 간격 {gap}일")
+        if not (0 <= lag <= 5):           # 사전등록 필터가 실제로 적용됐는가
+            bad.append(f"지연 {lag}일이 [0,5] 밖")
+        if len(after) < 30:               # H=30 청산가가 있는가
+            bad.append(f"이후 관측 {len(after)}일 < 30")
         print(f"    {r['symbol']:<6} CIK {r['cik']:<9} {fd}  "
-              f"직전종가 {d} ${panel[r['symbol']][d]:.2f}  "
-              f"거래단가 ${float(r['max_price']):.2f}  지연 {r['filing_lag_days']}일  "
-              f"이후 관측 {len(after)}일")
-        if d > fd:
+              f"직전종가 {d} ${panel[r['symbol']][d]:.2f} (간격 {gap}일)  "
+              f"거래단가 ${float(r['max_price']):.2f}  지연 {lag}일  "
+              f"이후 관측 {len(after)}일{'  ❌ ' + ', '.join(bad) if bad else ''}")
+        if bad:
             ok = False
-    print(f"    → PIT 정렬 {'✅ 모든 직전종가가 공시일 이하' if ok else '❌ 공시일 이후 종가가 붙었다'}")
+    print(f"    → {'✅ PIT 정렬·필터·청산가 모두 정상' if ok else '❌ 위 ❌ 항목 확인'}")
     return ok
 
 
@@ -164,8 +181,8 @@ def main() -> None:
                                        if (d / "SUBMISSION.tsv").exists())
     print(f"검증 대상 분기 {len(quarters)}개: {quarters[0]} ~ {quarters[-1]}")
 
-    ok_fold, raw_leak = check_fold_and_leak(quarters)
-    ok_leak = check_events_leak(args.events, raw_leak)
+    ok_fold, _raw_leak = check_fold_and_leak(quarters)
+    ok_leak = check_events_leak(args.events)
     flat = [ok_fold, ok_leak, check_10b5_column(quarters), spot_check(args.events)]
     print(f"\n{'🎉 단계 2 검증 통과' if all(flat) else '⚠️ 실패 항목 있음 — 위 ❌ 확인'}")
 

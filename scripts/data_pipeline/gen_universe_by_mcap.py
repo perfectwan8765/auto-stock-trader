@@ -91,6 +91,10 @@ def fetch_closes(symbols: list[str], start: str, end: str) -> pd.DataFrame:
     if failed[:5]:
         print(f"  실패 예: {', '.join(failed[:5])}")
     PRICES.parent.mkdir(parents=True, exist_ok=True)
+    # 전량 실패(yfinance 스로틀 등) 시 빈 프레임으로 캐시를 덮으면 수 시간치 수집이 날아가고
+    # 하류가 전부 "결측"으로 읽어 **가짜 kill 판정**을 만든다. 받은 게 없으면 캐시를 건드리지 않는다.
+    if df.empty:
+        raise SystemExit("[중단] 수집 결과가 비어 있다 — 기존 캐시를 보존한다. 재시도할 것")
     df.to_csv(PRICES)
     return df
 

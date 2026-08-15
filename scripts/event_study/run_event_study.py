@@ -64,7 +64,9 @@ def _bhar(px: pd.DataFrame, fac: pd.DataFrame, entry_idx: int, H: int,
         return None
     actual = px.close.iloc[exit_idx] / entry_price - 1
 
-    win = px.iloc[entry_idx:exit_idx + 1]
+    # 진입일 종가 기준 팩터 수익(= 전일 종가→진입일 종가)은 포지션이 생기기 전 구간을 포함한다.
+    # 포함하면 기대수익이 하루치 β·팩터만큼 과대해지고 BHAR이 그만큼 낮게 나온다.
+    win = px.iloc[entry_idx + 1:exit_idx + 1]
     d = fac.reindex(win.index).dropna()
     if len(d) < H * 0.6:               # 팩터 결측이 과하면 기대수익을 못 만든다
         return None
@@ -163,7 +165,11 @@ def estimate_rho(df: pd.DataFrame, prices: dict, fac: pd.DataFrame, max_sym: int
 
 
 def judge(df: pd.DataFrame, n_missing: int, H: int, label: str) -> dict:
-    """판정 통계 — winsor 1% · 섹터 통제 SE · 교차상관 보정 t · 결측 경계."""
+    """판정 통계 — winsor 1% · 섹터 통제 SE · 교차상관 보정 t · 결측 경계.
+
+    n_missing에는 **계산 실패분도 포함**해야 한다 — 가격 이력이 짧거나 추정창이 모자란
+    이벤트는 조기 상장·조기 소멸 쪽에 몰려 있어(비무작위) 빼면 경계가 낙관으로 기운다.
+    """
     x_raw = df.bhar
     x = _winsor(x_raw)
     n = len(x)
@@ -171,8 +177,9 @@ def judge(df: pd.DataFrame, n_missing: int, H: int, label: str) -> dict:
 
     # 섹터 통제 — 평균은 그대로, SE가 줄어든다(섹터 분산 제거)
     if "sic2" in df and df.sic2.notna().any():
-        dem = x - df.groupby("sic2").bhar.transform(lambda g: _winsor(g).mean())
-        se_sector = float(dem.std(ddof=1) / np.sqrt(n))
+        dem = (x - df.groupby("sic2").bhar.transform(lambda g: _winsor(g).mean())).dropna()
+        # SIC 결측 행은 dem에서 빠지므로 분모도 그 수로 맞춘다(전체 n을 쓰면 SE가 과소평가된다)
+        se_sector = float(dem.std(ddof=1) / np.sqrt(len(dem))) if len(dem) > 1 else np.nan
     else:
         se_sector = float(x.std(ddof=1) / np.sqrt(n))
     se_plain = float(x.std(ddof=1) / np.sqrt(n))
@@ -230,7 +237,8 @@ def main() -> None:
             if mode == "t1_open":
                 df.to_csv(OUT.with_name(f"event_study_bhar_H{H}.csv"), index=False)
                 print(f"  H={H} 산출 {len(df):,} · 제외 {df.attrs['skipped']}")
-            results.append(judge(df, len(miss), H, mode))
+            n_skipped = sum(df.attrs["skipped"].values())
+            results.append(judge(df, len(miss) + n_skipped, H, mode))
 
     r = pd.DataFrame(results)
     pd.set_option("display.width", 200)
