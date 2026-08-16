@@ -95,11 +95,12 @@ def test_no_trade_when_on_target():
 
 
 def test_band_suppresses_small_drift():
-    # 목표 350, 현재 370 → 편차 5.7% < 밴드 10% → 주문 없음.
+    # 목표 350, 현재 370 → 편차 5.7% < 밴드 10% → 주문 없음. 사유는 남아야 한다.
     p = _params(rebalance_band=0.10)
     plan = compute_rebalance({"AAPL": 0.5, "MSFT": 0.5}, {"AAPL": 3.7, "MSFT": 3.3},
                              {"AAPL": 100, "MSFT": 100}, p)
     assert plan.orders == []
+    assert plan.skipped == [("AAPL", "within_band"), ("MSFT", "within_band")]
 
 
 def test_band_allows_large_drift():

@@ -34,7 +34,9 @@ class RebalancePlan:
     """리밸런싱 산출물. orders는 실행 순서(매도先→매수, 개선1). skipped는 사유 기록."""
 
     orders: list[OrderIntent]
-    skipped: list[tuple[str, str]]  # (symbol, reason): below_min_order | insufficient_buying_power | partial_insufficient_buying_power
+    # (symbol, reason): within_band | below_min_order | insufficient_buying_power
+    #                 | partial_insufficient_buying_power
+    skipped: list[tuple[str, str]]
 
 
 class Broker(Protocol):

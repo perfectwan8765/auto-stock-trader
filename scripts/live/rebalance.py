@@ -118,6 +118,8 @@ def main() -> None:
     ap.add_argument("--kill-switch", default=str(ROOT / "KILL"), help="이 파일 존재 시 발주 중단")
     ap.add_argument("--max-orders", type=_positive_int, default=60, help="일일 주문건수 상한(서킷브레이커)")
     ap.add_argument("--max-loss", type=_positive_float, default=700.0, help="일일 손실 상한(USD, 손익 배선은 Phase 0)")
+    ap.add_argument("--circuit-state", default=str(LOG_DIR / "circuit_breaker.json"),
+                    help="서킷브레이커 상태 파일(E10) — 재기동이 상한을 우회하지 못하게 한다")
     ap.add_argument("--max-age-days", type=_positive_int, default=5,
                     help="시그널 최대 허용 경과일(미국 거래일 기준). 초과 시 실발주 거부(dry-run은 경고).")
     ap.add_argument("--confirm", action="store_true", help="실발주. 없으면 dry-run.")
@@ -130,7 +132,10 @@ def main() -> None:
     cfg = load_config(require_account=True)   # 주문 API는 X-Tossinvest-Account 필요
     broker = TossBroker(TossClient(cfg))
     state = ManagedState.load(args.state)
-    cb = CircuitBreaker(max_orders_per_day=args.max_orders, max_loss_usd=args.max_loss)
+    # E10: 상태를 파일로 남긴다. 인메모리만 쓰면 상한에 걸려 멈춘 뒤 재기동하는 것만으로
+    # 카운터가 0이 되어 안전판이 우회된다. day는 리밸 일자 — 시간대 해석에 의존하지 않는다.
+    cb = CircuitBreaker(max_orders_per_day=args.max_orders, max_loss_usd=args.max_loss,
+                        path=args.circuit_state, day=date)
     runner = RebalanceRunner(
         broker, min_order_usd=args.min_order, budget_usd=args.budget,
         managed_state=state, kill_switch_path=args.kill_switch,
@@ -140,7 +145,11 @@ def main() -> None:
     dry_run = not args.confirm
     mode = "DRY-RUN(계획만)" if dry_run else "🔴 실발주"
     print(f"시그널: {sig_path.relative_to(ROOT)} (date={sig['date']}, topk={sig['topk']})")
-    print(f"모드: {mode} · 예산 ${args.budget} · min ${args.min_order}")
+    print(f"모드: {mode} · 예산 ${args.budget} · min ${args.min_order}"
+          f" · no-trade 밴드 {runner.rebalance_band:.0%}")
+    if cb.orders_today or cb.realized_loss_usd:
+        print(f"서킷브레이커 이월: 주문 {cb.orders_today}/{args.max_orders}"
+              f" · 손실 ${cb.realized_loss_usd:.2f}/${args.max_loss:.2f} (같은 날 재실행)")
 
     # 시그널 신선도 가드: 오래된 시그널로 발주 방지(주간 cron에서 파이프라인 실패 시 지난
     # 시그널 재사용 차단). 실발주는 거부, dry-run은 경고만(계획 검토 허용).

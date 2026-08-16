@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from .errors import CircuitBreakerTripped, KillSwitchActive
@@ -25,14 +26,47 @@ class CircuitBreaker:
         broker.place(intent)
         cb.record_order()     # 발주 성공 후 카운트
         cb.record_loss(usd)   # 실현손실 확인 시 누적(다음 guard에서 반영)
-    상태는 인메모리(단일 실행 한정). 프로세스 재기동 넘는 지속은 Phase 6에서 파일 상태로.
+    ★ E10 — 상태를 파일로 영속한다. 인메모리만 쓰면 상한에 걸려 멈춘 뒤 프로세스를 다시
+    띄우는 것만으로 카운터가 0이 되어 **재시작이 안전판을 우회**한다. `path`를 주면
+    기록할 때마다 즉시 저장하므로 루프 중간에 죽어도 반영된 상태로 재개된다.
+    `path=None`이면 종전대로 인메모리(테스트·드라이런).
+
+    "일일"의 경계는 호출자가 `day`로 준다(러너는 `rebalance_date`). 저장된 날짜와 다르면
+    카운터를 리셋한다 — 시간대 해석에 의존하지 않으려는 것이다.
     """
 
-    def __init__(self, max_orders_per_day: int, max_loss_usd: float):
+    def __init__(self, max_orders_per_day: int, max_loss_usd: float,
+                 path: str | Path | None = None, day: str | None = None):
         self.max_orders_per_day = max_orders_per_day
         self.max_loss_usd = max_loss_usd
         self.orders_today = 0
         self.realized_loss_usd = 0.0
+        self.path = Path(path) if path else None
+        self.day = day
+        self._restore()
+
+    def _restore(self) -> None:
+        """저장된 같은 날짜의 카운터를 복원. 날짜가 다르거나 파일이 없으면 0에서 시작."""
+        if self.path is None or not self.path.exists():
+            return
+        try:
+            d = json.loads(self.path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return  # 손상된 상태 파일이 발주를 막지는 않되, 카운터는 0에서 다시 센다
+        if self.day is not None and d.get("day") != self.day:
+            return
+        self.orders_today = int(d.get("orders_today", 0))
+        self.realized_loss_usd = float(d.get("realized_loss_usd", 0.0))
+
+    def _persist(self) -> None:
+        if self.path is None:
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps({
+            "day": self.day,
+            "orders_today": self.orders_today,
+            "realized_loss_usd": round(self.realized_loss_usd, 4),
+        }, indent=2, ensure_ascii=False))
 
     def guard(self) -> None:
         if self.orders_today >= self.max_orders_per_day:
@@ -46,7 +80,9 @@ class CircuitBreaker:
 
     def record_order(self) -> None:
         self.orders_today += 1
+        self._persist()   # 주문마다 flush — 루프 중간에 죽어도 재시작이 상한을 우회 못 한다
 
     def record_loss(self, usd: float) -> None:
         if usd > 0:
             self.realized_loss_usd += usd
+            self._persist()

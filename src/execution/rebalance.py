@@ -65,6 +65,7 @@ def compute_rebalance(
     for sym in target_usd:
         price = prices.get(sym, 0.0)
         if within_band(sym):
+            skipped.append((sym, "within_band"))  # 조용히 넘기면 무동작 이유를 알 수 없다
             continue
         excess = current_usd(sym) - target_usd[sym]
         if excess > params.min_order_usd and price > 0:
@@ -75,7 +76,7 @@ def compute_rebalance(
     buys = []
     for sym in target_usd:
         if within_band(sym):
-            continue
+            continue      # 매도 루프에서 이미 within_band로 기록했다
         gap = target_usd[sym] - current_usd(sym)
         if gap <= 0:
             continue
