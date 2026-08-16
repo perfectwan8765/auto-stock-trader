@@ -4,6 +4,8 @@ order_sleep_s=0으로 rate-limit 간격을 꺼 테스트를 빠르게 유지.
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from execution.errors import CircuitBreakerTripped, KillSwitchActive
@@ -261,3 +263,69 @@ def test_snapshot_records_decision_inputs():
     assert res.snapshot["prices"]["AAPL"] == 100.0
     assert res.snapshot["rebalance_band"] == 0.10
     assert res.snapshot["buying_power_usd"] == 500.0
+
+
+def test_circuit_breaker_persists_through_runner(tmp_path):
+    """★ E10 통합: 러너의 발주 루프가 카운터를 파일에 남기고, 재기동이 상한을 우회하지 못한다.
+
+    safety 단위테스트는 CircuitBreaker 자체를 검증한다. 여기서 보는 것은 **배선** —
+    러너가 record_order()를 실제로 호출하는가, 그 결과가 파일에 남는가다.
+    """
+    path = tmp_path / "cb.json"
+    b = MockBroker(prices={"AAPL": 100.0, "MSFT": 100.0}, buying_power=700.0)
+    cb = CircuitBreaker(max_orders_per_day=1, max_loss_usd=1e9, path=path, day="20260718")
+
+    with pytest.raises(CircuitBreakerTripped):
+        _runner(b, circuit_breaker=cb).run({"AAPL": 0.5, "MSFT": 0.5}, "20260718", dry_run=False)
+
+    assert len(b.placed) == 1                      # 상한이 두 번째 주문을 막았다
+    assert json.loads(path.read_text())["orders_today"] == 1
+
+    # 재기동: 같은 날 다시 띄워도 첫 guard에서 즉시 트립 → 주문 0건
+    b2 = MockBroker(prices={"AAPL": 100.0}, buying_power=700.0)
+    cb2 = CircuitBreaker(max_orders_per_day=1, max_loss_usd=1e9, path=path, day="20260718")
+    with pytest.raises(CircuitBreakerTripped):
+        _runner(b2, circuit_breaker=cb2).run({"AAPL": 1.0}, "20260718", dry_run=False)
+    assert b2.placed == []
+
+
+def test_circuit_breaker_state_absent_in_dry_run(tmp_path):
+    # dry-run은 발주하지 않으므로 카운터도 파일도 건드리지 않는다.
+    path = tmp_path / "cb.json"
+    b = MockBroker(prices={"AAPL": 100.0})
+    cb = CircuitBreaker(max_orders_per_day=1, max_loss_usd=1e9, path=path, day="20260718")
+    _runner(b, circuit_breaker=cb).run({"AAPL": 1.0}, "20260718", dry_run=True)
+    assert not path.exists() and b.placed == []
+
+
+class _OddSchemaBroker(MockBroker):
+    """응답 스키마가 예상과 다른 브로커 — 필드명이 틀렸을 때의 거동을 고정한다."""
+
+    def get_order(self, order_id):
+        return {"fills": [{"px": "101.5"}]}   # execution 키가 없다
+
+
+class _RaisingQueryBroker(MockBroker):
+    def get_order(self, order_id):
+        raise RuntimeError("boom")
+
+
+def test_fill_schema_mismatch_degrades_without_losing_order(capsys):
+    """필드명이 틀려도 발주 기록은 남고, 사람이 알아챌 수 있게 경고가 뜬다.
+
+    get_order의 필드명은 Phase 0 실측표를 근거로 썼을 뿐 실응답 검증이 안 됐다.
+    틀렸을 때 크래시하거나 조용히 비는 것이 아니라, 기록은 남기고 경고를 내야 한다.
+    """
+    b = _OddSchemaBroker(prices={"AAPL": 100.0})
+    res = _runner(b).run({"AAPL": 1.0}, "20260718", dry_run=False)
+    assert res.placed and len(res.fills) == 1
+    assert res.fills[0]["avg_filled_price"] is None
+    assert res.fills[0]["order_id"] == "ord-1"          # 주문 자체는 추적 가능
+    assert "execution 필드가 없다" in capsys.readouterr().out
+
+
+def test_fill_query_failure_does_not_lose_order():
+    # 조회가 터져도 발주 결과를 버리지 않는다(사유는 기록).
+    b = _RaisingQueryBroker(prices={"AAPL": 100.0})
+    res = _runner(b).run({"AAPL": 1.0}, "20260718", dry_run=False)
+    assert res.placed and res.fills[0]["fetch_error"] == "RuntimeError"

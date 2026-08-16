@@ -202,6 +202,13 @@ class RebalanceRunner:
             except Exception as exc:  # noqa: BLE001 — 조회 실패가 발주 기록을 날리면 안 된다
                 row["fetch_error"] = _error_code(exc) or type(exc).__name__
             out.append(row)
+
+        # 필드명은 Phase 0 실측표(qlib-toss.md)를 근거로 썼을 뿐 실응답으로 검증된 적이 없다.
+        # 응답 스키마가 다르면 전 항목이 None이 되는데, 그건 조용히 넘어가면 안 되는 신호다
+        # — 슬리피지·실효 수수료가 통째로 비게 되고 그 사실이 로그에만 남는다.
+        if out and all(r.get("avg_filled_price") is None and "fetch_error" not in r for r in out):
+            print("⚠️ 체결 조회 응답에 execution 필드가 없다 — 아직 미체결이거나 "
+                  "응답 스키마가 예상과 다르다. qlib-toss.md의 주문 조회 필드를 확인할 것.")
         return out
 
     def run(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool = True) -> RunResult:

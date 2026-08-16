@@ -334,8 +334,12 @@ $700 계좌에서 **포트폴리오의 0.14% 드리프트에도 주문이 나갔
 - ✅ **no-trade 밴드** — `RebalanceParams.rebalance_band`, `compute_rebalance`에서 적용.
   편출(target에서 빠진 종목)에는 적용하지 않는다 — 드리프트가 아니라 편입 해제다
 - ✅ **결정 스냅샷** — `RunResult.snapshot`에 목표비중·가격·보유·예수금·밴드를 담아 주문 로그에 기록
-- ✅ **체결 실측** — `broker.get_order()` 추가. 발주 응답의 `orderId`를 잡아 조회하고
-  `RunResult.fills`에 담는다. 조회 실패가 발주 기록을 지우지 않도록 best-effort다
+- ⚠️ **체결 실측** — `broker.get_order()` 추가. 발주 응답의 `orderId`를 잡아 조회하고
+  `RunResult.fills`에 담는다. **필드명은 Phase 0 실측표를 근거로 썼을 뿐 실응답으로 검증되지
+  않았다** — 과거 체결 주문을 목록으로 끌어올 경로가 없어서다(`GET /orders`는 `status`에
+  `SCHEDULED/ACTIVE/DELISTED`만 받고 미체결은 0건). 대신 실패를 안전하게 만들었다:
+  스키마가 다르면 크래시 대신 값이 비고 **경고를 출력**하며, 조회가 터져도 발주 기록은 남는다.
+  **첫 실주문 때 이 경고가 뜨는지 반드시 확인할 것**
 - ✅ **holdings 스냅샷** — `scripts/live/snapshot_holdings.py` (읽기 전용).
   `cost.commission`은 조회 시점의 누적 상태라 저장하지 않으면 되살릴 수 없다
 - ✅ **E10 서킷브레이커 파일영속** — 인메모리만 쓰면 상한에 걸려 멈춘 뒤 재기동하는 것만으로
