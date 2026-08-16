@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass, field, replace
+from pathlib import Path
+from dataclasses import replace
 
 from .errors import ExecutionError
-from .interface import Broker, OrderIntent, RebalanceParams, RebalancePlan
+from .interface import Broker, OrderIntent, RebalanceParams, RebalancePlan, RunResult
 from .managed import ManagedState
+from .orderlog import write_order_log
 from .rebalance import compute_rebalance
 from .safety import CircuitBreaker, check_kill_switch
 
@@ -32,19 +34,6 @@ _PER_ORDER_SKIP_CODES = {"insufficient-buying-power", "market-not-supported-for-
 def _error_code(exc: Exception) -> str:
     code = getattr(exc, "code", "")
     return code if isinstance(code, str) else ""
-
-
-@dataclass
-class RunResult:
-    plan: RebalancePlan
-    dry_run: bool
-    placed: list[str] = field(default_factory=list)          # 발주된 clientOrderId
-    rejected: list[tuple[str, str]] = field(default_factory=list)  # (symbol, error_code) 개별 거부
-    aborted_reason: str | None = None                        # 예: "market_closed"
-    fills: list[dict] = field(default_factory=list)          # 체결 실측(슬리피지 계산 입력)
-    # 결정 시점 입력. 사후에 "왜 이 주문이 나갔나"를 재구성하려면 그때 본 값이 있어야 한다.
-    # 슬리피지(체결가 − 결정가) 계산의 기준가도 여기서 나온다.
-    snapshot: dict | None = None
 
 
 class RebalanceRunner:
@@ -262,8 +251,5 @@ class RebalanceRunner:
                            rejected=rejected, aborted_reason=aborted_reason,
                            snapshot=self._snapshot, fills=self._collect_fills(order_ids))
         if self.log_dir:
-            from pathlib import Path
-
-            from .orderlog import write_order_log  # lazy: orderlog ↔ runner 순환 import 회피
             write_order_log(result, rebalance_date, Path(self.log_dir))
         return result

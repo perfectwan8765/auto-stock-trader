@@ -9,7 +9,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from .runner import RunResult
+from .interface import RunResult
 
 
 def write_order_log(result: RunResult, date: str, out_dir: Path, signal_name: str | None = None) -> Path:

@@ -1,7 +1,7 @@
 """리밸런싱 로직이 의존하는 브로커 인터페이스·데이터 모델 (브로커 비의존)."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 
@@ -37,6 +37,23 @@ class RebalancePlan:
     # (symbol, reason): within_band | below_min_order | insufficient_buying_power
     #                 | partial_insufficient_buying_power
     skipped: list[tuple[str, str]]
+
+
+@dataclass
+class RunResult:
+    """리밸런싱 1회 실행의 산출물. `RebalancePlan`과 같은 급의 seam 데이터 모델이라
+    러너가 아니라 여기 산다 — orderlog가 러너를 import하고 러너가 orderlog를 지연
+    import하던 순환을 끊는다."""
+
+    plan: RebalancePlan
+    dry_run: bool
+    placed: list[str] = field(default_factory=list)          # 발주된 clientOrderId
+    rejected: list[tuple[str, str]] = field(default_factory=list)  # (symbol, error_code) 개별 거부
+    aborted_reason: str | None = None                        # 예: "market_closed"
+    fills: list[dict] = field(default_factory=list)          # 체결 실측(슬리피지 계산 입력)
+    # 결정 시점 입력. 사후에 "왜 이 주문이 나갔나"를 재구성하려면 그때 본 값이 있어야 한다.
+    # 슬리피지(체결가 − 결정가) 계산의 기준가도 여기서 나온다.
+    snapshot: dict | None = None
 
 
 class Broker(Protocol):
