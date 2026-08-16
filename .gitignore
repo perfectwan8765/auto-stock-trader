@@ -31,10 +31,15 @@ docs/*
 !docs/project/
 !docs/research/
 
+# 아래 셋은 화이트리스트에 없어 이미 제외되지만, **의도를 남기려고** 명시한다.
 # findings/ = 계좌 고유 실측값(식별자·잔액·보유). 절대 추적 금지.
 # tooling/  = 이 저장소 주제 밖(에이전트 도구 조사). 로컬 유지.
+# plans/    = 작업계획서. 작업 하나가 끝나면 버릴 발판이라 추적하지 않는다.
+#             ⚠️ 지우기 전에 durable 잔여(미조치 근거·다음 단계 관찰 목록)를
+#             docs/project/로 옮길 것 — 추적 밖이라 git 이력에도 없다.
 docs/findings/
 docs/tooling/
+docs/plans/
 
 # 에이전트 지침(로컬 전용)
 CLAUDE.md
