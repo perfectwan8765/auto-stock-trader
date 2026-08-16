@@ -1,6 +1,8 @@
 """안전장치 단위테스트 (개선4): kill switch · 서킷브레이커."""
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from execution.errors import CircuitBreakerTripped, KillSwitchActive
@@ -126,3 +128,30 @@ def test_legacy_state_without_daily_loss(tmp_path):
     path.write_text('{"day": "20260718", "orders_today": 3, "realized_loss_usd": 5.0}')
     cb = CircuitBreaker(max_orders_per_day=99, max_loss_usd=100.0, path=path, day="20260718")
     assert cb.orders_today == 3 and cb.realized_loss_usd == 5.0 and cb.daily_loss_usd == 0.0
+
+
+# --- A3: 서킷브레이커 상태 원자적 쓰기 ---
+
+def test_persist_leaves_no_partial_file_on_failure(tmp_path, monkeypatch):
+    """카운터 flush가 실패해도 직전 상태가 잘리지 않는다.
+
+    상한에 걸려 멈춘 상태 파일이 손상되면, 재기동 시 카운터가 0에서 다시 세어
+    E10(재기동 우회 방지)이 무력화된다.
+    """
+    path = tmp_path / "cb.json"
+    cb = CircuitBreaker(max_orders_per_day=5, max_loss_usd=100.0, path=path, day="20260718")
+    cb.record_order()
+    before = path.read_text()
+
+    import execution.atomic as atomic_mod
+
+    def boom(src, dst):
+        raise OSError("디스크 가득")
+
+    monkeypatch.setattr(atomic_mod.os, "replace", boom)
+    with pytest.raises(OSError):
+        cb.record_order()
+
+    assert path.read_text() == before                  # 잘리지 않았다
+    assert list(tmp_path.glob(".*tmp")) == []          # 임시파일 잔여 없음
+    assert json.loads(before)["orders_today"] == 1

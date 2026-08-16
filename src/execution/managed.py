@@ -16,6 +16,9 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .atomic import write_text_atomic
+from .errors import ExecutionError
+
 
 @dataclass
 class ManagedState:
@@ -32,7 +35,16 @@ class ManagedState:
         p = Path(path)
         if not p.exists():
             return cls(path=p)
-        d = json.loads(p.read_text())
+        # 손상 시 빈 상태로 넘어가지 않는다. 빈 상태는 bootstrapped=False라 다음 실행이
+        # 봇 보유분까지 제외셋 X로 동결해 영구히 관리 밖으로 내보낸다 — 조용한 손실보다
+        # 중단이 낫다. (CircuitBreaker는 0에서 다시 세도 안전 방향이라 정책이 다르다.)
+        try:
+            d = json.loads(p.read_text())
+        except (json.JSONDecodeError, OSError) as exc:
+            raise ExecutionError(
+                f"[상태 파일 손상] {p} 를 읽을 수 없다 ({exc}). 수동 확인 필요 — "
+                "백업이 있으면 복구하고, 없으면 계좌 보유와 대조해 excluded/managed를 재작성할 것."
+            ) from exc
         return cls(
             excluded=set(d.get("excluded", [])),
             managed=set(d.get("managed", [])),
@@ -43,8 +55,7 @@ class ManagedState:
     def save(self) -> None:
         if self.path is None:
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps({
+        write_text_atomic(self.path, json.dumps({
             "bootstrapped": self.bootstrapped,
             "excluded": sorted(self.excluded),
             "managed": sorted(self.managed),

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .atomic import write_text_atomic
 from .errors import CircuitBreakerTripped, KillSwitchActive
 
 
@@ -69,8 +70,7 @@ class CircuitBreaker:
     def _persist(self) -> None:
         if self.path is None:
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps({
+        write_text_atomic(self.path, json.dumps({
             "day": self.day,
             "orders_today": self.orders_today,
             "daily_loss_usd": round(self.daily_loss_usd, 4),

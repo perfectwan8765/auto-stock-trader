@@ -141,3 +141,48 @@ def test_missing_price_for_held_symbol_aborts():
     with pytest.raises(ExecutionError):
         RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0,
                         managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=True)
+
+
+# --- A2: 상태 파일 손상 처리 (빈 상태 폴백 금지) ---
+
+def test_load_raises_on_corrupt_state_file(tmp_path):
+    """손상된 managed_state.json은 ExecutionError로 중단한다.
+
+    빈 상태로 폴백하면 bootstrapped=False가 되어 다음 실행이 **봇 보유분까지** 제외셋 X로
+    동결한다(bootstrap은 '현재 보유 = 사용자 것'으로 간주). 그러면 봇이 산 종목이 영구히
+    관리 밖으로 나가 청산도 리밸도 안 된다. 중단이 조용한 손실보다 낫다.
+    """
+    p = tmp_path / "managed_state.json"
+    p.write_text('{"excluded": [')            # 잘린 JSON
+    with pytest.raises(ExecutionError, match="상태 파일 손상"):
+        ManagedState.load(p)
+
+
+def test_load_missing_file_is_not_corruption(tmp_path):
+    # 파일이 없는 것은 첫 실행이지 손상이 아니다 — 빈 상태로 시작해야 한다.
+    st = ManagedState.load(tmp_path / "absent.json")
+    assert st.bootstrapped is False and st.excluded == set() and st.managed == set()
+
+
+# --- A3: 상태 파일 원자적 쓰기 ---
+
+def test_save_is_atomic_on_failure(tmp_path, monkeypatch):
+    """쓰기 도중 죽어도 기존 파일이 잘리지 않는다."""
+    p = tmp_path / "managed_state.json"
+    ManagedState(excluded={"AAPL"}, managed={"NVDA"}, bootstrapped=True, path=p).save()
+    before = p.read_text()
+
+    import execution.atomic as atomic_mod
+    real_replace = atomic_mod.os.replace
+
+    def boom(src, dst):
+        raise OSError("디스크 가득")
+
+    monkeypatch.setattr(atomic_mod.os, "replace", boom)
+    with pytest.raises(OSError):
+        ManagedState(excluded={"TSLA"}, managed=set(), bootstrapped=True, path=p).save()
+
+    monkeypatch.setattr(atomic_mod.os, "replace", real_replace)
+    assert p.read_text() == before                      # 기존 내용 보존
+    assert list(tmp_path.glob(".*tmp")) == []           # 임시파일도 안 남는다
+    assert ManagedState.load(p).excluded == {"AAPL"}    # 여전히 읽힌다
