@@ -142,7 +142,7 @@ K=15~20 유지.
 > ⚠️ **2026-08-16 — "남은 건 Phase 6 스모크"는 더 이상 맞지 않다.**
 > Phase 6·7은 **굴릴 전략이 있다**는 전제 위에 있는데 그 전제가 두 번 부정됐다 —
 > Phase 3(대형주 주간 selection alpha 없음, CAPM 분해로 β 틸트 확정)과
-> Edge v2(마이크로캡 + Form 4 인사이더, 1층 게이트 불통과 → [`PREREGISTRATION.md`](PREREGISTRATION.md) §10).
+> Edge v2(마이크로캡 + Form 4 인사이더, 1층 게이트 불통과 → [`microcap-insider-prereg.md`](microcap-insider-prereg.md) §10).
 > **아래 "Phase 6·7 진입 조건"을 먼저 읽을 것.**
 
 ### Phase 0 실측 상수 (확정 2026-07-20, 실주문 기반)
@@ -152,11 +152,11 @@ K=15~20 유지.
 
 | 항목 | 실측값 | 소비처 |
 |---|---|---|
-| 계좌 헤더 | `X-Tossinvest-Account` = **`accountSeq`** (`accountNo`는 `400 account-not-found`) | [client.py](src/toss/client.py) |
-| 토큰 | `expires_in` ≈ 86400초(24h), 파일 캐시 | [client.py](src/toss/client.py) |
+| 계좌 헤더 | `X-Tossinvest-Account` = **`accountSeq`** (`accountNo`는 `400 account-not-found`) | [client.py](../../src/toss/client.py) |
+| 토큰 | `expires_in` ≈ 86400초(24h), 파일 캐시 | [client.py](../../src/toss/client.py) |
 | 소수점 주문 | 금액주문(fractional) 가능 | 유니버스·K 산정 |
 | 최소 주문금액 | **≤ $1** ($1 매수 FILLED) → K 상한 사실상 무제한 | `min_order_usd` |
-| 환전 | **자동환전 없음.** KRW 보유·USD 0이면 `422 insufficient-buying-power` → **선환전 필수** | [runner.py](src/execution/runner.py), 운영절차 |
+| 환전 | **자동환전 없음.** KRW 보유·USD 0이면 `422 insufficient-buying-power` → **선환전 필수** | [runner.py](../../src/execution/runner.py), 운영절차 |
 | 결제주기 | **T+2** (`execution.settlementDate`, 영업일) | `not_sellable_settlement` 가드 |
 | ORDER rate-limit | `X-RateLimit-Limit=6`, `Reset=1` → **6주문/초** | `order_sleep_s` |
 | 그룹별 rate-limit | ACCOUNT 1 TPS · ASSET/STOCK 5 · MARKET_DATA 10 | 상동 |
@@ -165,8 +165,8 @@ K=15~20 유지.
 | 매도 fee | SEC/FINRA `tax` 최소 $0.01 (유의미 규모에선 ~0.001%로 무시가능) | 상동 |
 | FX 스프레드 | `basisPoint=3` = **0.03%/편도** (mid 대비), 호가 유효 5분 | 상동 |
 | 멱등 보장 | 동일 `clientOrderId` 2회 발주 → **1회만 체결·같은 orderId 반환** | 재시도 설계 |
-| 에러 응답 | `{"error":{"code","message","data"}}` **중첩** (flat 아님) | [errors.py](src/toss/errors.py) |
-| market-calendar | 모든 시각 **KST**, `isOpen` 필드 없음 → 정규장 `[start,end)` 비교로 판정 | [broker.py](src/toss/broker.py) |
+| 에러 응답 | `{"error":{"code","message","data"}}` **중첩** (flat 아님) | [errors.py](../../src/toss/errors.py) |
+| market-calendar | 모든 시각 **KST**, `isOpen` 필드 없음 → 정규장 `[start,end)` 비교로 판정 | [broker.py](../../src/toss/broker.py) |
 
 응답 스키마(`result.items[]`·`lastPrice`·`cashBuyingPower`·`today.regularMarket` 등)는
 [tests/test_broker.py](tests/test_broker.py)에 실측 픽스처로 고정돼 있다 — 스펙 변경 시 테스트가 깨져 알려준다.
@@ -188,7 +188,7 @@ GET  /api/v1/market-calendar/US → result.today: {regularMarket, preMarket, aft
 ```
 
 - `execution.filledQuantity`는 **체결수량 기반 관리셋 M 갱신**의 입력이다. 현재 러너는 발주 의도 기준으로만
-  M을 갱신한다([managed.py](src/execution/managed.py) 한계 주석) — 정밀화하려면 위 GET 래퍼부터 추가해야 한다.
+  M을 갱신한다([managed.py](../../src/execution/managed.py) 한계 주석) — 정밀화하려면 위 GET 래퍼부터 추가해야 한다.
 - `market` / `status` + `delistDate` / `listDate`는 OTC 배제·생존편향 교차검증·PIT 편입일 판정에 쓴다.
 - market-calendar 시각 예: 정규장 `22:30~익일 05:00 KST`(=09:30~16:00 ET), preMarket `17:00~22:30`, afterMarket `05:00~08:50`.
 
@@ -382,7 +382,7 @@ $700 계좌에서 **포트폴리오의 0.14% 드리프트에도 주문이 나갔
   실탄이 들고 USD 선환전이 선행돼야 하므로 **사용자 승인 없이는 진행하지 않는다.**
 - **Phase 7(전액 가동)은 진입 조건을 못 갖췄다.** 굴릴 전략이 없으므로 착수하면
   기댓값이 음수인 매매를 자동화하는 것이 된다. **새 전략이 게이트를 통과하기 전까지 보류.**
-- 사전등록이 지목한 귀결은 **인덱스/DCA**다(`PREREGISTRATION.md` §10.2).
+- 사전등록이 지목한 귀결은 **인덱스/DCA**다(`microcap-insider-prereg.md` §10.2).
   그쪽으로 갈 경우 필요한 것은 알파 탐색이 아니라 **정기 매수 집행 자동화**이며,
   Phase 5까지의 발주 어댑터·안전장치를 그대로 재사용할 수 있다.
 

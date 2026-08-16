@@ -4,7 +4,7 @@ Qlib으로 미국주식 전략을 검증하고, 통과한 전략을 토스증권
 
 **현재 굴리는 전략은 없다.** 발주·안전 계층은 완성됐고, 지금까지 검증한 두 전략이 모두 게이트를 통과하지 못했다(아래 진행 상태).
 
-> 상세 계획·의사결정은 [qlib-toss.md](qlib-toss.md) 참고(작업계획서).
+> 상세 계획·의사결정은 [`docs/project/roadmap.md`](docs/project/roadmap.md) 참고(작업계획서).
 > $700 규모의 **학습·검증 목적** 프로젝트입니다. 실전 수익을 보장하지 않습니다.
 
 시스템은 두 부분으로 나뉜다.
@@ -132,7 +132,7 @@ flowchart TD
 
 리밸 계산 규칙 (`compute_rebalance`):
 
-- **no-trade 밴드**: 목표 대비 편차가 밴드 이내면 아예 거래하지 않는다. 최소 주문금액은 집행 하한이지 정책이 아니라, 그것만 쓰면 미세한 드리프트에도 주문이 나간다. 밴드 값과 근거는 [`qlib-toss.md`](qlib-toss.md) Phase 5.5.
+- **no-trade 밴드**: 목표 대비 편차가 밴드 이내면 아예 거래하지 않는다. 최소 주문금액은 집행 하한이지 정책이 아니라, 그것만 쓰면 미세한 드리프트에도 주문이 나간다. 밴드 값과 근거는 [`roadmap.md`](docs/project/roadmap.md) Phase 5.5.
 - 매도 먼저: 빠질 종목을 전량 팔고 초과분을 정리한 뒤 매수한다(매수 자금 확보).
 - 가용현금 한도: 매수는 현재 현금 범위 안에서만 하고, 넘치는 분량은 다음 주기로 미룬다(매도대금 T+N 정산 반영).
 - 최소금액 미달 스킵: 최소 주문금액에 못 미치는 주문은 건너뛴다.
@@ -187,8 +187,8 @@ qlib이 기본 제공하는 피처셋으로, OHLCV(시가·고가·저가·종�
 - [x] **Phase 3** 모델 학습 + 백테스트 (①배선 ②S&P500 판독 — 엣지 미검출) — `scripts/model_backtest/` 참고
 - [x] **Phase 4** 시그널 생성 (4a 목표비중 JSON + 4b dry-run runner) — `scripts/model_backtest/`
 - [x] **Phase 5** 토스 발주 어댑터 — 리밸/OMS `src/execution`, 응답필드 실측 확정, 안전장치(개선10/13/14 + sellable 상한·max-loss·주문루프 하드닝·시그널 신선도)
-- [x] **Phase 5.5** 집행 캘리브레이션 — no-trade 밴드, 집행 실측 기록 3종(결정 스냅샷·체결·holdings), 서킷브레이커 파일영속 — [`qlib-toss.md`](qlib-toss.md) Phase 5.5
-- [ ] **Phase 6~7** 스모크 + 소액 실전 — ⚠️ **진입 조건 미충족.** 두 Phase 다 굴릴 전략이 있다는 전제 위에 있는데 Phase 3(대형주)·Edge v2(마이크로캡 인사이더)가 둘 다 엣지를 부정했다. 상세는 [`qlib-toss.md`](qlib-toss.md) "Phase 6·7 진입 조건"
+- [x] **Phase 5.5** 집행 캘리브레이션 — no-trade 밴드, 집행 실측 기록 3종(결정 스냅샷·체결·holdings), 서킷브레이커 파일영속 — [`roadmap.md`](docs/project/roadmap.md) Phase 5.5
+- [ ] **Phase 6~7** 스모크 + 소액 실전 — ⚠️ **진입 조건 미충족.** 두 Phase 다 굴릴 전략이 있다는 전제 위에 있는데 Phase 3(대형주)·Edge v2(마이크로캡 인사이더)가 둘 다 엣지를 부정했다. 상세는 [`roadmap.md`](docs/project/roadmap.md) "Phase 6·7 진입 조건"
 
 ### Edge v2 — 미국 소형주 + Insider(Form 4) ⛔ **종료** (2026-08-16)
 
@@ -198,7 +198,7 @@ qlib이 기본 제공하는 피처셋으로, OHLCV(시가·고가·저가·종�
 | 단계 | 결과 |
 |---|---|
 | 0 집행가능성 | ✅ Toss 취급률 **90.7%**, 고정 최소수수료 없음(0.10~0.13%/편도), **호가 미제공** |
-| 0.5 사전등록 | ✅ [`PREREGISTRATION.md`](PREREGISTRATION.md) 커밋 — 이후 스펙 변경은 이탈로 기록 |
+| 0.5 사전등록 | ✅ [`microcap-insider-prereg.md`](docs/project/microcap-insider-prereg.md) 커밋 — 이후 스펙 변경은 이탈로 기록 |
 | 1 커버리지·퇴출 | ✅ 이벤트 커버리지 **84.5%**, 보유기간 내 퇴출 **3.1%** — 두 kill 통과 |
 | 2 DERA 45분기 | ✅ 거래행 3.4M → 필터 통과 **60,378건** |
 | 3 이벤트스터디 | ⛔ **불통과** — 실현 가능 BHAR 비관 경계 **−2.93%** vs 임계 **+3.60%** |
@@ -211,7 +211,7 @@ Phase 3(대형주)의 *"병목은 비용이 아니라 신호품질"* 이 다른 
 진단: 공시 전 모멘텀 최상위 버킷만 +3.63%(t=2.64)로 인용 문헌의 방향은 재현되나
 **비용 후 +0.16%로 본전**이다. 은행 집중(판정 표본의 24%)은 결과를 만들지 않았다.
 
-- 사전등록·이탈 2건(D-1·D-2)·정정 3건(A-1~A-3) 전체 이력: [`PREREGISTRATION.md`](PREREGISTRATION.md)
+- 사전등록·이탈 2건(D-1·D-2)·정정 3건(A-1~A-3) 전체 이력: [`microcap-insider-prereg.md`](docs/project/microcap-insider-prereg.md)
 - 코드: `scripts/data_pipeline/`(수집·측정 9종) · `scripts/event_study/`(BHAR·BMP/KP·calendar-time)
 - 작업계획서는 `docs/`(git 미추적)에 있다
 
@@ -314,17 +314,18 @@ universe/          유니버스 티커 리스트 (S&P500 전체·파일럿, 마�
 vendor/            외부 원본 파일 (qlib dump_bin.py) — 수정 금지
 .streamlit/        대시보드 테마 (Streamlit이 자동으로 읽음)
 data/, signals/, execution_logs/   (gitignore) 생성물·계좌 로그
-qlib-toss.md       전체 작업계획서 (Phase 0~7·개선N·API 스펙·의사결정·Phase 0 실측 상수)
-PREREGISTRATION.md Edge v2 사전등록 — 판정 결과·이탈 2건·정정 3건 (추적됨, 삭제 금지)
-ledger-design.md   실집행 원장(SQLite) 설계 — 구현은 Phase 0
+docs/project/      로드맵·작업계획서·사전등록·설계 (추적)
+docs/research/     외부 문헌·사례 조사 (추적)
+docs/findings/     계좌 실측 스냅샷 (gitignore — 계좌 고유값)
+docs/tooling/      에이전트 도구 조사 (gitignore — 저장소 주제 밖)
 requirements.txt   의존성 핀 (재현용)
 ```
 
 ## 보안
 
 - 자격증명은 **`.env`에서만** 읽으며 코드/저장소에 넣지 않는다 (`.env.example` 참고).
-- `.env`, `.cache/`(토큰), `phase0b-execution-gate.md`(계좌 고유 실측값)는 `.gitignore`로 커밋 차단.
+- `.env`, `.cache/`(토큰), `docs/findings/`(계좌 고유 실측값)는 `.gitignore`로 커밋 차단.
 - **`execution_logs/`도 커밋 차단** — 주문 로그와 holdings 스냅샷에 보유 종목·수량·수수료가 들어간다.
-- 실측 결과 중 **계정 무관한 API 계약·비용만** `qlib-toss.md` §Phase 0 실측 상수에 남긴다. 계좌번호·잔액·보유 종목은 커밋하지 않고 API 재조회로 얻는다.
+- 실측 결과 중 **계정 무관한 API 계약·비용만** `docs/project/roadmap.md` §Phase 0 실측 상수에 남긴다. 계좌번호·잔액·보유 종목은 커밋하지 않고 API 재조회로 얻는다.
 - 저장소는 **Private** 권장.
 - **계좌 공유 안전**: 토스 계좌를 사용자 수동 보유와 공유하므로, 봇은 **자기가 산 종목(관리셋)·설정 예산 안에서만** 매매한다. 사용자가 직접 산 종목·현금은 건드리지 않는다(화이트리스트, 개선14).

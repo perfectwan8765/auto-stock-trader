@@ -8,10 +8,6 @@
 .cache/
 .toss_token.json
 
-# 실측 결과 원본(계좌식별자·잔액·보유 등 민감정보 포함 가능) — 커밋 금지.
-# 계정 무관한 API 계약·비용만 추려 qlib-toss.md §Phase 0 실측 상수에 남긴다.
-phase0b-execution-gate.md
-
 # python
 .venv/
 venv/
@@ -28,8 +24,17 @@ signals/
 # 리밸런싱 주문로그(dry-run·실발주 산출물)
 execution_logs/
 
-# 작업계획서(로컬 전용, 추적 안 함)
-docs/
+# 문서 — 기본은 제외하고 카테고리별로 명시적으로 연다(화이트리스트).
+# 블랙리스트로 하면 새 폴더가 기본 추적이라, 계좌정보가 든 문서를 무심코 넣으면
+# 그대로 커밋된다. 실제로 그 사고를 한 번 겪었다(d3bd183).
+docs/*
+!docs/project/
+!docs/research/
+
+# findings/ = 계좌 고유 실측값(식별자·잔액·보유). 절대 추적 금지.
+# tooling/  = 이 저장소 주제 밖(에이전트 도구 조사). 로컬 유지.
+docs/findings/
+docs/tooling/
 
 # 에이전트 지침(로컬 전용)
 CLAUDE.md

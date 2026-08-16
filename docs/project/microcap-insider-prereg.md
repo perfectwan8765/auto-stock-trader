@@ -12,8 +12,8 @@
 > ⚠️⚠️ **§3.3(D-1)과 §3.4(D-2)는 이탈 기록이다.** 둘 다 **제약을 느슨하게 하는 방향**이며
 > 사용자 승인을 받았다. 커밋 후에도 삭제하지 않는다.
 >
-> 작업계획서: `docs/microcap-insider-workplan.md` (git 추적 밖. 전수 숫자는 그 문서 §3.15)
-> 상위 계획: `qlib-toss.md` · 구조·현황: `README.md`
+> 작업계획서: [`microcap-insider.md`](microcap-insider.md) (git 추적 밖. 전수 숫자는 그 문서 §3.15)
+> 상위 계획: [`roadmap.md`](roadmap.md) · 구조·현황: [`../../README.md`](../../README.md)
 
 - 작성일: 2026-08-09
 - 확정일: **2026-08-15** (단계 1 전수 확정 후)
@@ -210,7 +210,7 @@ E[결측] = 0.031 × (−55%) + 0.969 × (관측 CAR × h)
 4. **구 조건이 발동한 직후에 수정됐다는 사실은 지워지지 않는다**
 
 > **이 표는 커밋 후에도 삭제하지 않는다.** OSF amendment 관행은 원본을 날짜와 함께 남기고
-> 개정을 별도 타임스탬프로 기록한다. 근거 조사: `docs/prereg-deviation-and-attrition-research.md`
+> 개정을 별도 타임스탬프로 기록한다. 근거 조사: [`../research/prereg-deviation.md`](../research/prereg-deviation.md)
 >
 > 참고: 사전등록 연구의 **82%가 이탈하고 55%만 보고**한다. **이탈이 실패가 아니라 미보고가 실패다.**
 
@@ -410,7 +410,7 @@ n_eff = n_events(주 스펙 필터 전부 적용)      SE = σ / √n_eff      t
 > **구 조건을 되살리지 말 것** — 되살리면 프로젝트가 즉시 종료된다.
 >
 > ⚠️ **15%는 문헌 근거 없는 프로젝트 고유 임의값이다.** WWC attrition standard는 RCT의 차등 감쇠용이고
-> 우리에겐 처치군이 없어 정의되지 않는다(`docs/prereg-deviation-and-attrition-research.md` §4.2).
+> 우리에겐 처치군이 없어 정의되지 않는다([`../research/prereg-deviation.md`](../research/prereg-deviation.md) §4.2).
 > **정당화는 감도로만 한다** — 전수 측정값 3.1%와 여유가 커서 10~20% 어디로 옮겨도 결론이 안 바뀐다.
 
 ---
@@ -554,6 +554,26 @@ National Commercial Banks 6.4% · REIT 5.1% · 보험 4.5% = 금융 약 34%** �
 `spread_final` 결측을 0으로 부과(판정 표본 **결측 0건**) · `t_sector` 50% 커버리지 가정
 (**실제 SIC 커버리지 98%**) · 보유 중 퇴출 이벤트 탈락(H=30 **발생 0건**).
 
+
+### A-4 (2026-08-16) — 파일 경로 변경 (내용 변경 없음)
+
+**성격: 사무적 이동.** 저장소 문서를 카테고리 폴더로 재배치하면서 이 파일도 옮겼다.
+**본문의 어떤 값도 바꾸지 않았다** — 판정·스펙·이탈 기록 전부 그대로다.
+
+| | 이전 | 현재 |
+|---|---|---|
+| 이 문서 | `PREREGISTRATION.md` (저장소 루트) | `docs/project/microcap-insider-prereg.md` |
+| 작업계획서 | `docs/microcap-insider-workplan.md` | `docs/project/microcap-insider.md` |
+| 이탈 근거 조사 | `docs/prereg-deviation-and-attrition-research.md` | `docs/research/prereg-deviation.md` |
+| 상위 계획 | `qlib-toss.md` | `docs/project/roadmap.md` |
+
+**추적 상태는 유지된다.** `.gitignore`를 화이트리스트로 바꿔(`docs/*` 제외 + `docs/project/`·
+`docs/research/` 허용) 이 문서는 계속 git 추적 대상이다 — 사전등록의 효력은 위치가 아니라
+**커밋 타임스탬프**에서 나오므로, 원본 커밋 `f960342`와 `git mv` 이력이 그대로 남는다.
+
+⚠️ 아래 본문·이탈 기록에는 당시 경로(`PREREGISTRATION.md` 등)가 그대로 남아 있다.
+**과거 사실의 기록이므로 고치지 않는다** — 그때는 실제로 그 경로였다.
+
 ---
 
 ## 10. 판정 결과 — 1층 게이트 (2026-08-16)
@@ -618,4 +638,4 @@ National Commercial Banks 6.4% · REIT 5.1% · 보험 4.5% = 금융 약 34%** �
 | 확정일 | **2026-08-15** |
 | 근거 데이터 | 단계 1 전수 확정 — DERA 2023q1~2026q1 13분기, 이벤트 14,136, 주 스펙 2,355 (§9 A-1 반영) |
 | 이탈 기록 | **D-1**(kill 조건 재명세) · **D-2**(스프레드 합격선) — 둘 다 승인됨. 삭제하지 않는다 |
-| 정정 기록 | **A-1**(음수 공시지연 필터 누락) · **A-2**(단계 3 명세 확정 — 생존편향 분모 + 측정 정의 8건) · **A-3**(코드리뷰 5건 수정 후 재산출, 판정 불변) — §9 |
+| 정정 기록 | **A-1**(음수 공시지연 필터 누락) · **A-2**(단계 3 명세 확정) · **A-3**(코드리뷰 5건 수정 후 재산출, 판정 불변) · **A-4**(파일 경로 이동, 내용 불변) — §9 |
