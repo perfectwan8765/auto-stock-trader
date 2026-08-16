@@ -102,15 +102,18 @@ flowchart TD
   S["시그널 (목표비중)"]:::model --> R
   BK["계좌 상태<br/>보유·가격·가용현금"]:::broker --> R["RebalanceRunner"]:::exec
   R --> F["화이트리스트 필터<br/>수동보유(X) 제외 · 봇보유(M)만 · 예산 상한"]:::exec
-  F --> C["리밸 계산<br/>매도 먼저 → 매수"]:::exec
-  C --> P["발주계획 + 스킵 사유"]:::exec
+  F --> C["리밸 계산<br/>밴드 밖만 · 매도 먼저 → 매수"]:::exec
+  C --> P["발주계획 + 스킵 사유<br/>within_band · 최소금액 · 현금부족"]:::exec
   P --> DR{"dry-run?"}
   DR -->|"예"| OUT["계획만 출력"]:::exec
   DR -->|"아니오"| K{"kill switch?"}
   K -->|"켜짐"| STOP["즉시 중단"]:::broker
   K -->|"꺼짐"| MK{"정규장?"}
   MK -->|"닫힘"| AB["발주 안 함"]:::broker
-  MK -->|"열림"| PL["주문 발주<br/>매도→매수, 멱등키"]:::broker
+  MK -->|"열림"| CB{"서킷브레이커<br/>주문수·손실 상한"}
+  CB -->|"초과"| TR["중단(상태는 파일에 영속)"]:::broker
+  CB -->|"여유"| PL["주문 발주<br/>매도→매수, 멱등키"]:::broker
+  PL --> FQ["체결 조회 → 결정 스냅샷과 함께 기록"]:::exec
 
   classDef model fill:#eef2f7,stroke:#5b7089,color:#2b3a4a
   classDef exec fill:#eaf2ee,stroke:#4c7a5d,color:#274736
@@ -119,6 +122,7 @@ flowchart TD
 
 리밸 계산 규칙 (`compute_rebalance`):
 
+- **no-trade 밴드**: 목표 대비 편차가 10% 이내면 아예 거래하지 않는다. 최소 주문금액(집행 하한, 실측 $1)이 밴드를 겸하면 포트폴리오의 0.14% 드리프트에도 주문이 나간다. 근거와 고정 약속은 [`qlib-toss.md`](qlib-toss.md) Phase 5.5.
 - 매도 먼저: 빠질 종목을 전량 팔고 초과분을 정리한 뒤 매수한다(매수 자금 확보).
 - 가용현금 한도: 매수는 현재 현금 범위 안에서만 하고, 넘치는 분량은 다음 주기로 미룬다(매도대금 T+N 정산 반영).
 - 최소금액 미달 스킵: 최소 주문금액에 못 미치는 주문은 건너뛴다.
@@ -173,10 +177,8 @@ qlib이 기본 제공하는 피처셋으로, OHLCV(시가·고가·저가·종�
 - [x] **Phase 3** 모델 학습 + 백테스트 (①배선 ②S&P500 판독 — 엣지 미검출) — `scripts/model_backtest/` 참고
 - [x] **Phase 4** 시그널 생성 (4a 목표비중 JSON + 4b dry-run runner) — `scripts/model_backtest/`
 - [x] **Phase 5** 토스 발주 어댑터 — 리밸/OMS `src/execution`, 응답필드 실측 확정, 안전장치(개선10/13/14 + sellable 상한·max-loss·주문루프 하드닝·시그널 신선도)
-- [ ] **Phase 6~7** 스모크 테스트 + 소액 실전 — ⚠️ **진입 조건 미충족.** 두 Phase 다 "net 초과수익이
-  기대되는 전략"을 전제하는데 Phase 3(대형주)·Edge v2(마이크로캡 인사이더) 판정이 둘 다 엣지를
-  부정했다. Phase 6은 **인프라 검증 목적으로만** 유효하고(실탄·선환전 필요, 사용자 승인 전제),
-  **Phase 7 전액 가동은 보류**다. 상세는 [`qlib-toss.md`](qlib-toss.md) "Phase 6·7 진입 조건"
+- [x] **Phase 5.5** 집행 캘리브레이션 — **no-trade 밴드**(10%), 집행 실측 기록 3종(결정 스냅샷·체결·holdings), **서킷브레이커 파일영속**(재시작이 상한을 우회하던 결함 해소). 전략과 무관하게 옳은 개선이라 먼저 했다 — [`qlib-toss.md`](qlib-toss.md) Phase 5.5
+- [ ] **Phase 6~7** 스모크 + 소액 실전 — ⚠️ **진입 조건 미충족.** 두 Phase 다 굴릴 전략이 있다는 전제 위에 있는데 Phase 3(대형주)·Edge v2(마이크로캡 인사이더)가 둘 다 엣지를 부정했다. 상세는 [`qlib-toss.md`](qlib-toss.md) "Phase 6·7 진입 조건"
 
 ### Edge v2 — 미국 소형주 + Insider(Form 4) ⛔ **종료** (2026-08-16)
 
@@ -214,7 +216,7 @@ Phase 3(대형주)의 *"병목은 비용이 아니라 신호품질"* 이 다른 
 | 번호 | 내용 | 위치 |
 |------|------|------|
 | 1 | 자금순환·부분이월 | `execution/rebalance` |
-| 4 | dry-run·kill switch·서킷브레이커 | `execution/safety`, `runner` |
+| 4 | dry-run·kill switch·서킷브레이커(**상태 파일영속**) | `execution/safety`, `runner` |
 | 5 | 멱등키 | `execution/rebalance` |
 | 8 | 최소금액 스킵 | `execution/rebalance` |
 | 10 | 예외화(TossError) | `toss/errors` |
@@ -294,14 +296,16 @@ src/execution/     리밸런싱·OMS (브로커 비의존: interface·rebalance�
 scripts/toss_probe/       Phase 0 실측 툴킷 (키 발급 후 순서대로 실행)
 scripts/data_pipeline/    Phase 2 데이터 파이프라인 (수집→정규화→dump→검증)
 scripts/model_backtest/   Phase 3~4 학습·백테스트·시그널·dry-run (config 구동)
+scripts/event_study/      Edge v2 이벤트스터디 (판정 코드: BHAR·교차상관 보정·진단)
 scripts/live/             실 발주 진입점 (dry-run 기본, --confirm 실발주) — Phase 0 키 필요
 scripts/dashboard/        백테스트·주문로그 뷰어 (`streamlit run scripts/dashboard/app.py`)
 tests/             단위테스트 (pytest) — toss·rebalance·safety·runner·managed·broker·live
 universe/          유니버스 티커 리스트 (S&P500 전체·파일럿, 마이크로캡 후보·거래가능)
 vendor/            외부 원본 파일 (qlib dump_bin.py) — 수정 금지
 .streamlit/        대시보드 테마 (Streamlit이 자동으로 읽음)
-data/, signals/    (gitignore) 생성물
+data/, signals/, execution_logs/, docs/   (gitignore) 생성물·계좌 로그·작업계획서
 qlib-toss.md       전체 작업계획서 (Phase 0~7·개선N·API 스펙·의사결정·Phase 0 실측 상수)
+PREREGISTRATION.md Edge v2 사전등록 — 판정 결과·이탈 2건·정정 3건 (추적됨, 삭제 금지)
 ledger-design.md   실집행 원장(SQLite) 설계 — 구현은 Phase 0
 requirements.txt   의존성 핀 (재현용)
 ```
@@ -310,6 +314,7 @@ requirements.txt   의존성 핀 (재현용)
 
 - 자격증명은 **`.env`에서만** 읽으며 코드/저장소에 넣지 않는다 (`.env.example` 참고).
 - `.env`, `.cache/`(토큰), `phase0b-execution-gate.md`(계좌 고유 실측값)는 `.gitignore`로 커밋 차단.
+- **`execution_logs/`도 커밋 차단** — 주문 로그와 holdings 스냅샷에 보유 종목·수량·수수료가 들어간다.
 - 실측 결과 중 **계정 무관한 API 계약·비용만** `qlib-toss.md` §Phase 0 실측 상수에 남긴다. 계좌번호·잔액·보유 종목은 커밋하지 않고 API 재조회로 얻는다.
 - 저장소는 **Private** 권장.
 - **계좌 공유 안전**: 토스 계좌를 사용자 수동 보유와 공유하므로, 봇은 **자기가 산 종목(관리셋)·설정 예산 안에서만** 매매한다. 사용자가 직접 산 종목·현금은 건드리지 않는다(화이트리스트, 개선14).
