@@ -127,9 +127,6 @@ class TossBroker:
     def snapshot(self, target_symbols: list[str]) -> AccountSnapshot:
         """계좌 상태를 한 시점에 모아 온다. holdings는 **1회만** 조회한다.
 
-        종전에는 러너가 보유·가격·가용액을 따로 부르고 당일손익 때문에 holdings를 또 쳤다.
-        여기서 묶으면 시점이 섞이지 않고 왕복도 준다.
-
         Args:
             target_symbols: 목표 비중에 있는 심볼. 가격은 이 집합 ∪ 보유 종목에 대해 받는다.
         """
@@ -154,9 +151,8 @@ class TossBroker:
     def get_sellable(self, symbols: list[str]) -> dict[str, float]:
         """심볼별 매도가능수량. 호출 사이에 간격을 두고 속도제한은 재시도한다.
 
-        토스는 이 조회를 단건으로만 받아 심볼 수만큼 왕복한다. ACCOUNT 그룹은 한도가 낮아
-        (러너 주석 기준 1 TPS) 연속 호출하면 rate-limit에 걸리는데, 종전에는 러너가 sleep도
-        재시도도 없이 루프를 돌았다. throttle이 여기 있어야 하는 이유다.
+        토스는 단건 조회만 받아 심볼 수만큼 왕복한다. ACCOUNT 그룹은 한도가 낮아
+        (실측 1 TPS) 연속 호출하면 속도제한에 걸린다.
         """
         out: dict[str, float] = {}
         for n, sym in enumerate(symbols):

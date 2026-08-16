@@ -6,6 +6,7 @@ import pytest
 from execution.errors import ExecutionError
 from execution.interface import AccountSnapshot, OrderIntent
 from execution.managed import ManagedState
+from execution.interface import RunnerPolicy
 from execution.runner import RebalanceRunner
 
 
@@ -74,8 +75,8 @@ def test_manual_holding_never_sold():
     # 사용자가 TSLA 수동 보유. 봇 목표는 AAPL. TSLA는 목표에 없지만 절대 매도되면 안 됨.
     broker = MockBroker(holdings={"TSLA": 10.0})
     state = ManagedState(excluded={"TSLA"}, managed=set(), bootstrapped=True)
-    res = RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0,
-                          managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=False)
+    res = RebalanceRunner(broker, RunnerPolicy(min_order_usd=1.0, budget_usd=700.0),
+                    managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=False)
     assert all(o.symbol != "TSLA" for o in broker.placed)   # TSLA 매매 없음
     assert any(o.symbol == "AAPL" and o.side == "BUY" for o in broker.placed)
 
@@ -84,8 +85,8 @@ def test_target_overlapping_manual_is_skipped():
     # 봇 목표에 TSLA가 있어도, 사용자 수동 보유(X)면 스킵.
     broker = MockBroker(holdings={"TSLA": 10.0})
     state = ManagedState(excluded={"TSLA"}, managed=set(), bootstrapped=True)
-    res = RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0,
-                          managed_state=state).run({"TSLA": 0.5, "AAPL": 0.5}, "20260716", dry_run=True)
+    res = RebalanceRunner(broker, RunnerPolicy(min_order_usd=1.0, budget_usd=700.0),
+                    managed_state=state).run({"TSLA": 0.5, "AAPL": 0.5}, "20260716", dry_run=True)
     assert all(o.symbol != "TSLA" for o in res.plan.orders)
     assert ("TSLA", "excluded_manual") in res.plan.skipped
 
@@ -95,7 +96,7 @@ def test_first_live_run_bootstraps_and_persists(tmp_path):
     broker = MockBroker(holdings={"TSLA": 10.0})
     p = tmp_path / "managed_state.json"
     state = ManagedState.load(p)   # 파일 없음 → bootstrapped=False
-    RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0,
+    RebalanceRunner(broker, RunnerPolicy(min_order_usd=1.0, budget_usd=700.0),
                     managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=False)
     assert p.exists()
     saved = ManagedState.load(p)
@@ -108,8 +109,8 @@ def test_budget_caps_buying():
     # 예산 $700인데 계좌현금 10000 → 매수합은 예산 내(≤700).
     broker = MockBroker(holdings={}, buying_power=10000.0)
     state = ManagedState(bootstrapped=True)   # 빈 계좌 동결
-    res = RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0,
-                          managed_state=state).run({"AAPL": 0.5, "MSFT": 0.5}, "20260716", dry_run=True)
+    res = RebalanceRunner(broker, RunnerPolicy(min_order_usd=1.0, budget_usd=700.0),
+                    managed_state=state).run({"AAPL": 0.5, "MSFT": 0.5}, "20260716", dry_run=True)
     total_buy = sum(o.value for o in res.plan.orders if o.side == "BUY")
     assert total_buy <= 700.0 + 1e-6
 
@@ -119,7 +120,7 @@ def test_dry_run_does_not_persist_state(tmp_path):
     broker = MockBroker(holdings={"TSLA": 10.0})
     p = tmp_path / "managed_state.json"
     state = ManagedState.load(p)
-    RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0,
+    RebalanceRunner(broker, RunnerPolicy(min_order_usd=1.0, budget_usd=700.0),
                     managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=True)
     assert not p.exists()
 
@@ -128,7 +129,8 @@ def test_dry_run_does_not_flip_bootstrapped(tmp_path):
     # F1: dry-run이 state.bootstrapped를 True로 바꾸면 안 됨(같은 객체 라이브 시 보호 무력화 방지).
     broker = MockBroker(holdings={"TSLA": 10.0})
     state = ManagedState.load(tmp_path / "s.json")  # bootstrapped=False
-    runner = RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0, managed_state=state)
+    runner = RebalanceRunner(broker, RunnerPolicy(min_order_usd=1.0, budget_usd=700.0),
+                             managed_state=state)
     runner.run({"AAPL": 1.0}, "20260716", dry_run=True)
     assert state.bootstrapped is False          # dry-run 후에도 미부트스트랩
     # 이어서 같은 객체로 실발주 → 이제 실제 보유로 동결·보호
@@ -148,8 +150,8 @@ def test_missing_price_for_held_symbol_aborts():
     broker = NoPriceBroker(holdings={"NVDA": 3.0})
     state = ManagedState(managed={"NVDA"}, bootstrapped=True)
     with pytest.raises(ExecutionError):
-        RebalanceRunner(broker, min_order_usd=1.0, budget_usd=700.0,
-                        managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=True)
+        RebalanceRunner(broker, RunnerPolicy(min_order_usd=1.0, budget_usd=700.0),
+                    managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=True)
 
 
 # --- A2: 상태 파일 손상 처리 (빈 상태 폴백 금지) ---

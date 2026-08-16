@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from execution.runner import RebalanceRunner  # noqa: E402
+from execution.interface import AccountSnapshot, RunnerPolicy  # noqa: E402
 from execution.orderlog import write_order_log  # noqa: E402
 
 
@@ -27,20 +28,21 @@ class SyntheticBroker:
         self._bp = buying_power
         self._price = flat_price
 
-    def get_holdings(self):
+    def snapshot(self, target_symbols):
+        return AccountSnapshot(holdings={}, prices={s: self._price for s in target_symbols},
+                               buying_power_usd=self._bp, daily_pnl={})
+
+    def get_sellable(self, symbols):
         return {}
-
-    def get_prices(self, symbols):
-        return {s: self._price for s in symbols}
-
-    def get_buying_power_usd(self):
-        return self._bp
 
     def is_market_open(self):
         return True
 
     def place(self, intent):  # dry-run에선 호출 안 됨
         raise RuntimeError("SyntheticBroker.place는 실발주 불가(데모)")
+
+    def get_fill(self, order_id):
+        return None
 
 
 def _latest_signal() -> Path:
@@ -62,7 +64,7 @@ def main() -> None:
     date = sig["date"].replace("-", "")
 
     broker = SyntheticBroker(buying_power=args.buying_power)
-    runner = RebalanceRunner(broker, min_order_usd=args.min_order)
+    runner = RebalanceRunner(broker, RunnerPolicy(min_order_usd=args.min_order))
     res = runner.run(sig["weights"], rebalance_date=date, dry_run=True)
 
     print(f"📄 시그널: {sig_path.relative_to(ROOT)} (date={sig['date']}, topk={sig['topk']})")

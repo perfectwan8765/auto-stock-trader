@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -41,9 +41,9 @@ class RebalancePlan:
 
 @dataclass
 class RunResult:
-    """리밸런싱 1회 실행의 산출물. `RebalancePlan`과 같은 급의 seam 데이터 모델이라
-    러너가 아니라 여기 산다 — orderlog가 러너를 import하고 러너가 orderlog를 지연
-    import하던 순환을 끊는다."""
+    """리밸런싱 1회 실행의 산출물.
+
+    `RebalancePlan`과 같은 급의 seam 데이터 모델이라 러너가 아니라 여기 산다."""
 
     plan: RebalancePlan
     dry_run: bool
@@ -54,15 +54,27 @@ class RunResult:
     # 결정 시점 입력. 사후에 "왜 이 주문이 나갔나"를 재구성하려면 그때 본 값이 있어야 한다.
     # 슬리피지(체결가 − 결정가) 계산의 기준가도 여기서 나온다.
     snapshot: dict | None = None
+    policy: dict | None = None   # 적용된 RunnerPolicy(asdict). 사후에 설정을 재구성한다
+
+
+@dataclass(frozen=True)
+class RunnerPolicy:
+    """리밸런싱 실행 정책. 협력자·파일경로와 분리해 한 값으로 묶는다.
+
+    실행 로그에 그대로 직렬화되므로 "그때 어떤 설정으로 돌았나"를 사후 재구성할 수 있다.
+    """
+
+    min_order_usd: float
+    budget_usd: float | None = None
+    rebalance_band: float = 0.10       # no-trade 밴드. 성과 보고 목적의 조정 금지
+    order_sleep_s: float = 1.0         # 주문 간 간격(rate-limit 준수)
+    rate_limit_retries: int = 3
+    rate_limit_backoff_s: float = 2.0
 
 
 @dataclass(frozen=True)
 class AccountSnapshot:
-    """한 시점의 계좌 상태. 읽기 호출을 하나로 접은 결과다.
-
-    종전에는 보유·가격·가용액을 각각 조회해 시점이 섞인 값 위에서 예산을 계산했고,
-    `/api/v1/holdings`를 한 실행에서 두 번 쳤다(보유 + 당일손익). 어댑터가 한 번에
-    만들어 주면 시점 일관성과 호출 절약이 함께 온다.
+    """한 시점의 계좌 상태. 읽기를 한 번에 모아 시점이 섞이지 않게 한다.
 
     `sellable`은 여기 없다 — 계획이 나오기 전에는 쓸 데가 없고, 보유 전 종목을 미리
     받으면 매도 몇 건에 보유 수십 건을 조회하게 된다. `Broker.get_sellable` 참조.
@@ -90,6 +102,7 @@ class Fill:
     filled_at: str | None = None
 
 
+@runtime_checkable
 class Broker(Protocol):
     """리밸런싱이 요구하는 브로커 능력. src/toss가 구체 구현(TossBroker).
 

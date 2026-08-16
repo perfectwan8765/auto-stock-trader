@@ -35,9 +35,8 @@ class ManagedState:
         p = Path(path)
         if not p.exists():
             return cls(path=p)
-        # 손상 시 빈 상태로 넘어가지 않는다. 빈 상태는 bootstrapped=False라 다음 실행이
-        # 봇 보유분까지 제외셋 X로 동결해 영구히 관리 밖으로 내보낸다 — 조용한 손실보다
-        # 중단이 낫다. (CircuitBreaker는 0에서 다시 세도 안전 방향이라 정책이 다르다.)
+        # 빈 상태로 폴백하면 bootstrapped=False가 되어 다음 실행이 봇 보유분까지
+        # 제외셋 X로 동결한다 — 영구히 관리 밖으로 나간다. 중단이 낫다.
         try:
             d = json.loads(p.read_text())
         except (json.JSONDecodeError, OSError) as exc:

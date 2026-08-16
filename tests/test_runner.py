@@ -12,6 +12,7 @@ from execution.errors import CircuitBreakerTripped, KillSwitchActive
 from conftest import _as_broker_error
 from execution.interface import AccountSnapshot, Fill, OrderIntent
 from execution.managed import ManagedState
+from execution.interface import RunnerPolicy
 from execution.runner import RebalanceRunner
 from execution.safety import CircuitBreaker
 
@@ -64,9 +65,13 @@ class MockBroker:
 
 
 def _runner(broker, **kw):
-    kw.setdefault("order_sleep_s", 0)
-    kw.setdefault("rate_limit_backoff_s", 0)
-    return RebalanceRunner(broker, min_order_usd=1.0, **kw)
+    policy_fields = {"min_order_usd", "budget_usd", "rebalance_band",
+                     "order_sleep_s", "rate_limit_retries", "rate_limit_backoff_s"}
+    pk = {k: kw.pop(k) for k in list(kw) if k in policy_fields}
+    pk.setdefault("min_order_usd", 1.0)
+    pk.setdefault("order_sleep_s", 0)
+    pk.setdefault("rate_limit_backoff_s", 0)
+    return RebalanceRunner(broker, RunnerPolicy(**pk), **kw)
 
 
 TW = {"AAPL": 0.5, "MSFT": 0.5}

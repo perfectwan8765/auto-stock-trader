@@ -1,14 +1,14 @@
 """리밸런싱 실행 오케스트레이션 (브로커 비의존).
 
-흐름: 브로커 상태 스냅샷 → (화이트리스트 필터) → compute_rebalance → 매도 sellable 상한(B) →
-dry-run(계획만) 또는 실발주(안전장치 통과 후). 브로커는 주입(TossBroker 실전 / MockBroker 테스트).
+흐름: 계좌 스냅샷 → 화이트리스트 필터 → compute_rebalance → 매도 sellable 상한 →
+dry-run(계획만) 또는 실발주(안전장치 통과 후). 브로커는 주입한다.
 
 화이트리스트(managed.ManagedState): 봇은 관리셋 M 종목만 매매하고, 제외셋 X(사용자 수동
-보유)는 건드리지 않는다. 예산 상한(budget_usd)으로 계좌 공유 현금 과지출도 막는다.
-개선4(kill switch·서킷브레이커)·개선6(정규장 확인 후 발주).
+보유)는 건드리지 않는다. 예산 상한으로 계좌 공유 현금 과지출도 막는다.
 
-실발주 루프 하드닝(D): 주문 간 sleep(rate-limit), 속도제한 백오프 재시도,
-장마감/개별거부는 정규화된 예외 타입으로 분기(브로커 코드 문자열은 어댑터가 번역). 손실상한(C): 봇 관리분 당일손익을 서킷브레이커에 배선.
+안전장치: kill switch · 서킷브레이커 · 정규장 확인 후 발주. 발주 루프는 주문 간 간격을
+두고 속도제한은 백오프 재시도한다. 장마감·개별거부는 정규화된 예외 타입으로 분기한다 —
+브로커 코드 문자열의 번역은 어댑터 책임이다.
 """
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ from .interface import (
     OrderIntent,
     RebalanceParams,
     RebalancePlan,
+    RunnerPolicy,
     RunResult,
 )
 from .managed import ManagedState
@@ -40,36 +41,27 @@ class RebalanceRunner:
     def __init__(
         self,
         broker: Broker,
-        min_order_usd: float,
-        budget_usd: float | None = None,
+        policy: RunnerPolicy,
+        *,
         managed_state: ManagedState | None = None,
         kill_switch_path: str | None = None,
         circuit_breaker: CircuitBreaker | None = None,
         log_dir: str | None = None,
-        rebalance_band: float = 0.10,     # no-trade 밴드(qlib-toss.md Phase 5.5). 성과 보고 조정 금지
-        order_sleep_s: float = 1.0,       # 주문 간 간격. ORDER 그룹 실측 6주문/초(0-7)이나 ACCOUNT 1 TPS에 맞춰 보수적
-        rate_limit_retries: int = 3,      # 속도제한 재시도 상한
-        rate_limit_backoff_s: float = 2.0,
     ):
         self.broker = broker
-        self.min_order_usd = min_order_usd
-        self.rebalance_band = rebalance_band
-        self.budget_usd = budget_usd
+        self.policy = policy
         self.state = managed_state if managed_state is not None else ManagedState(path=None)
         self.kill_switch_path = kill_switch_path
         self.cb = circuit_breaker
         self.log_dir = log_dir  # 설정 시 실발주 결과를 execution_logs로 영속화(대시보드 소스)
-        self.order_sleep_s = order_sleep_s
-        self.rate_limit_retries = rate_limit_retries
-        self.rate_limit_backoff_s = rate_limit_backoff_s
 
     def _build_plan(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool) -> RebalancePlan:
         snap = self.broker.snapshot(sorted(target_weights))
         self._account = snap
         holdings = snap.holdings
 
-        # 제외셋 X·관리셋 M 결정. dry-run은 state를 절대 변경하지 않는다(read-only) —
-        # dry-run이 bootstrapped 플래그를 오염시켜 이후 라이브 보호가 무력화되는 걸 방지(F1).
+        # dry-run은 state를 변경하지 않는다. bootstrapped 플래그가 오염되면
+        # 이후 실발주에서 사용자 보유 보호가 무력화된다.
         if self.state.bootstrapped:
             excluded, managed = self.state.excluded, self.state.managed
         else:
@@ -88,7 +80,7 @@ class RebalanceRunner:
 
         prices = snap.prices
 
-        # 보유 종목 가격 누락 시 예산 계산이 왜곡돼 과지출 위험 → 안전 중단(F2)
+        # 가격이 없으면 봇 보유 평가액이 낮게 잡혀 예산이 과대 계산된다 → 과지출
         missing = [s for s in bot_holdings if prices.get(s, 0.0) <= 0]
         if missing:
             raise ExecutionError(f"보유 종목 가격 누락 → 예산 계산 불가(안전 중단): {missing}")
@@ -96,14 +88,14 @@ class RebalanceRunner:
         account_bp = snap.buying_power_usd
         bot_value = sum(bot_holdings[s] * prices[s] for s in bot_holdings)
 
-        if self.budget_usd is None:  # 예산 미설정: 봇 보유 + 계좌현금 전체(구 동작)
+        if self.policy.budget_usd is None:  # 예산 미설정: 봇 보유 + 계좌현금 전체
             total_equity, buying_power = bot_value + account_bp, account_bp
         else:                        # 예산 상한: 목표 규모=budget, 매수는 남은 예산·계좌현금 내
-            total_equity = self.budget_usd
-            buying_power = max(0.0, min(account_bp, self.budget_usd - bot_value))
+            total_equity = self.policy.budget_usd
+            buying_power = max(0.0, min(account_bp, self.policy.budget_usd - bot_value))
 
-        params = RebalanceParams(total_equity, buying_power, self.min_order_usd, rebalance_date,
-                                 rebalance_band=self.rebalance_band)
+        params = RebalanceParams(total_equity, buying_power, self.policy.min_order_usd, rebalance_date,
+                                 rebalance_band=self.policy.rebalance_band)
         plan = compute_rebalance(target, bot_holdings, prices, params)
         self._snapshot = {
             "target_weights": dict(target_weights),
@@ -115,8 +107,8 @@ class RebalanceRunner:
             "rebalance_band": params.rebalance_band,
             "excluded_targets": list(excluded_targets),
         }
-        plan = self._clamp_sells_to_sellable(plan)  # B: T+N 미결제분 초과매도 방지
-        if excluded_targets:  # frozen plan 직접 mutate 대신 재구성(F3)
+        plan = self._clamp_sells_to_sellable(plan)
+        if excluded_targets:
             plan = RebalancePlan(
                 orders=plan.orders,
                 skipped=plan.skipped + [(s, "excluded_manual") for s in excluded_targets],
@@ -162,10 +154,10 @@ class RebalanceRunner:
             try:
                 return ("placed", self.broker.place(order))
             except BrokerRateLimited:
-                if attempts >= self.rate_limit_retries:
+                if attempts >= self.policy.rate_limit_retries:
                     raise
                 attempts += 1
-                time.sleep(self.rate_limit_backoff_s * attempts)  # 선형 백오프
+                time.sleep(self.policy.rate_limit_backoff_s * attempts)  # 선형 백오프
             except BrokerMarketClosed as exc:
                 return ("abort", getattr(exc, "code", "") or "market_closed")
             except OrderRejected as exc:
@@ -199,16 +191,18 @@ class RebalanceRunner:
         self._account: AccountSnapshot | None = None
         plan = self._build_plan(target_weights, rebalance_date, dry_run)
         if dry_run:
-            return RunResult(plan=plan, dry_run=True, snapshot=self._snapshot)
+            return RunResult(plan=plan, dry_run=True, snapshot=self._snapshot,
+                             policy=asdict(self.policy))
 
         # --- 실발주: 안전장치 ---
         if self.kill_switch_path:
             check_kill_switch(self.kill_switch_path)
-        if not self.broker.is_market_open():             # 개선6: 정규장 확인 후만
-            return RunResult(plan=plan, dry_run=False, aborted_reason="market_closed")
+        if not self.broker.is_market_open():
+            return RunResult(plan=plan, dry_run=False, aborted_reason="market_closed",
+                             policy=asdict(self.policy))
 
-        # C: 봇 관리분(M) 당일손익을 손실상한에 배선. 손실이면 서킷브레이커에 시드 →
-        # 첫 guard()에서 상한 초과 시 트립(주문 0건). 사용자 수동 보유(X)는 제외.
+        # 봇 관리분(M)의 당일손익만 손실상한에 반영한다 — 사용자 수동 보유(X)의 손실로
+        # 봇이 멈추면 안 된다.
         if self.cb is not None and self.state.managed and self._account is not None:
             daily = sum(v for s, v in self._account.daily_pnl.items() if s in self.state.managed)
             # 절대 스냅샷이므로 대입한다. 누적하면 같은 날 재실행마다 이중계상된다(P0-1).
@@ -224,8 +218,8 @@ class RebalanceRunner:
             for i, order in enumerate(plan.orders):  # 매도先→매수 순서(compute_rebalance 보장)
                 if self.cb is not None:
                     self.cb.guard()
-                if i > 0 and self.order_sleep_s > 0:
-                    time.sleep(self.order_sleep_s)   # rate-limit 준수(호출 간 간격)
+                if i > 0 and self.policy.order_sleep_s > 0:
+                    time.sleep(self.policy.order_sleep_s)   # rate-limit 준수(호출 간 간격)
                 outcome, code = self._place_order(order)
                 if outcome == "placed":
                     placed.append(order.client_order_id)
@@ -244,7 +238,8 @@ class RebalanceRunner:
 
         result = RunResult(plan=plan, dry_run=False, placed=placed,
                            rejected=rejected, aborted_reason=aborted_reason,
-                           snapshot=self._snapshot, fills=self._collect_fills(order_ids))
+                           snapshot=self._snapshot, policy=asdict(self.policy),
+                           fills=self._collect_fills(order_ids))
         if self.log_dir:
             write_order_log(result, rebalance_date, Path(self.log_dir))
         return result

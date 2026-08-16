@@ -38,6 +38,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from execution.errors import ExecutionError  # noqa: E402
 from execution.managed import ManagedState  # noqa: E402
+from execution.interface import RunnerPolicy  # noqa: E402
 from execution.runner import RebalanceRunner  # noqa: E402
 from execution.safety import CircuitBreaker  # noqa: E402
 from toss.broker import TossBroker  # noqa: E402
@@ -136,9 +137,9 @@ def main() -> None:
     # 카운터가 0이 되어 안전판이 우회된다. day는 리밸 일자 — 시간대 해석에 의존하지 않는다.
     cb = CircuitBreaker(max_orders_per_day=args.max_orders, max_loss_usd=args.max_loss,
                         path=args.circuit_state, day=date)
+    policy = RunnerPolicy(min_order_usd=args.min_order, budget_usd=args.budget)
     runner = RebalanceRunner(
-        broker, min_order_usd=args.min_order, budget_usd=args.budget,
-        managed_state=state, kill_switch_path=args.kill_switch,
+        broker, policy, managed_state=state, kill_switch_path=args.kill_switch,
         circuit_breaker=cb, log_dir=str(LOG_DIR),
     )
 
@@ -146,7 +147,7 @@ def main() -> None:
     mode = "DRY-RUN(계획만)" if dry_run else "🔴 실발주"
     print(f"시그널: {sig_path.relative_to(ROOT)} (date={sig['date']}, topk={sig['topk']})")
     print(f"모드: {mode} · 예산 ${args.budget} · min ${args.min_order}"
-          f" · no-trade 밴드 {runner.rebalance_band:.0%}")
+          f" · no-trade 밴드 {policy.rebalance_band:.0%}")
     if cb.orders_today or cb.realized_loss_usd:
         print(f"서킷브레이커 이월: 주문 {cb.orders_today}/{args.max_orders}"
               f" · 손실 ${cb.realized_loss_usd:.2f}/${args.max_loss:.2f} (같은 날 재실행)")

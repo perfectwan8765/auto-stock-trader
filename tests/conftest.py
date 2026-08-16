@@ -86,13 +86,14 @@ def _make_broker(holdings=None, prices=None, buying_power=10_000.0, sellable=Non
 def _make_runner(broker, min_order_usd=1.0, budget_usd=None, rebalance_band=0.10,
                 managed_state=None, circuit_breaker=None):
     """특성화 테스트용 러너. 생성자 시그니처가 바뀌면 **이 함수만** 고친다."""
+    from execution.interface import RunnerPolicy
     from execution.runner import RebalanceRunner
 
-    return RebalanceRunner(
-        broker, min_order_usd=min_order_usd, budget_usd=budget_usd,
-        rebalance_band=rebalance_band, managed_state=managed_state,
-        circuit_breaker=circuit_breaker, order_sleep_s=0, rate_limit_backoff_s=0,
-    )
+    policy = RunnerPolicy(min_order_usd=min_order_usd, budget_usd=budget_usd,
+                          rebalance_band=rebalance_band, order_sleep_s=0,
+                          rate_limit_backoff_s=0)
+    return RebalanceRunner(broker, policy, managed_state=managed_state,
+                           circuit_breaker=circuit_breaker)
 
 
 @pytest.fixture

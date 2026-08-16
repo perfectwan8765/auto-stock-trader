@@ -24,6 +24,7 @@ def write_order_log(result: RunResult, date: str, out_dir: Path, signal_name: st
         "skipped": [list(s) for s in result.plan.skipped],
         "placed": list(result.placed),
         "rejected": [list(r) for r in result.rejected],
+        "policy": result.policy,       # 그때 적용된 설정 — 사후 재구성용
         "snapshot": result.snapshot,   # 결정 시점 입력 — 슬리피지 계산의 기준가
         "fills": list(result.fills),   # 체결 실측 — 슬리피지·실효 수수료의 출처
     }
