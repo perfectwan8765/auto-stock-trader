@@ -13,10 +13,15 @@
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 from pathlib import Path
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import write_csv_atomic  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 DERA = ROOT / "data" / "dera"
@@ -96,7 +101,7 @@ def main() -> None:
     f = ev[(ev.amount_usd >= args.min_amount) & (ev.max_price >= args.min_price)
            & (ev.max_price <= args.max_price)
            & (ev.filing_lag_days >= 0) & (ev.filing_lag_days <= args.max_lag)]
-    f.to_csv(OUT, index=False)
+    write_csv_atomic(f, OUT, index=False)
     print(f"이벤트(필터 후): {len(f):,}\n")
 
     print("=== (발행사, 공시일)당 고유 내부자 수 ===")

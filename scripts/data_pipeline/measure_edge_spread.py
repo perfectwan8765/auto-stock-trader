@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 from pathlib import Path
 
@@ -18,6 +20,9 @@ import pandas as pd
 import yfinance as yf
 from bidask import edge_rolling
 from spread_estimators import abdi_ranaldo, corwin_schultz
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import write_csv_atomic  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 ADDV = ROOT / "data" / "events_addv.csv"
@@ -39,7 +44,7 @@ def main() -> None:
     if args.report_only:
         out = pd.read_csv(OUT)
         _report(out)
-        _finalize(out).to_csv(OUT, index=False)
+        write_csv_atomic(_finalize(out), OUT, index=False)
         return
 
     ev = pd.read_csv(ADDV, parse_dates=["filing_date"])
@@ -85,7 +90,7 @@ def main() -> None:
         out[f"{est}_w{w}"] = vals
     print(f"\n[완료] {OUT.relative_to(ROOT)}")
     _report(out)
-    _finalize(out).to_csv(OUT, index=False)
+    write_csv_atomic(_finalize(out), OUT, index=False)
 
 
 def _report(out: pd.DataFrame) -> None:

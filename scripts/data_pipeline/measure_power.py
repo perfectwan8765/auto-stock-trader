@@ -9,14 +9,19 @@
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import CANDIDATE_CLOSES_CSV  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
-CLOSES = ROOT / "data" / "candidate_closes.csv"
+CLOSES = CANDIDATE_CLOSES_CSV
 ADDV = ROOT / "data" / "events_addv.csv"
 
 HORIZON = 30          # 거래일

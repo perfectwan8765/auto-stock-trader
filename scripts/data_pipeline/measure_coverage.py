@@ -7,14 +7,19 @@ kill(1)("최근 구간조차 커버리지 80% 미달 → 종료")은 전수로 �
 """
 from __future__ import annotations
 
+import sys
+
 from pathlib import Path
 
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV, TOSS_META_CSV  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
-EVENTS = ROOT / "data" / "insider_events.csv"
-CLOSES = ROOT / "data" / "candidate_closes.csv"
-TOSS_META = ROOT / "data" / "toss_stock_meta.csv"
+EVENTS = EVENTS_CSV
+CLOSES = CANDIDATE_CLOSES_CSV
+TOSS_META = TOSS_META_CSV
 
 
 def main() -> None:

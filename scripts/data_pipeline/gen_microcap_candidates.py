@@ -19,6 +19,8 @@ SEC DERA "Insider Transactions Data Sets"(Form 3/4/5 파싱본)에서 내부자 
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 import collections
 import csv
@@ -29,13 +31,16 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import EVENTS_CSV  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 DERA_DIR = ROOT / "data" / "dera"
 OUT = ROOT / "universe" / "microcap_candidates.txt"
 # PIT 발행주식수(SEC XBRL) 조회는 티커가 아니라 CIK로 한다.
 OUT_CSV = ROOT / "universe" / "microcap_candidates.csv"
 # 이벤트 원본. 시총 밴드 산정·이벤트스터디가 소비한다.
-OUT_EVENTS = ROOT / "data" / "insider_events.csv"
+OUT_EVENTS = EVENTS_CSV
 
 # SEC는 이메일 포함 User-Agent를 요구한다(없으면 403).
 UA = "qlib-toss research ax2team@didim.com"

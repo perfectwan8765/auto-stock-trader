@@ -5,11 +5,12 @@ data/ 아래 산출물은 .gitignore(재생성 가능). universe/는 커밋.
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# ② 확장: 기본 유니버스 = S&P500 전체(+SPY). pilot(41) 재현은 QLIB_UNIVERSE=sp500_pilot.txt로.
+# 기본 유니버스 = S&P500 전체(+SPY). 파일럿 재현은 QLIB_UNIVERSE=sp500_pilot.txt.
 UNIVERSE_FILE = ROOT / "universe" / os.environ.get("QLIB_UNIVERSE", "sp500_full.txt")
 # Edge v2(마이크로캡)는 대형주 번들과 raw/정규화/bin을 공유하면 안 된다 — 02_normalize가
 # data/raw/*.csv를 통째로 글롭하므로 한 디렉터리에 섞으면 유니버스가 오염된다.
@@ -42,6 +43,15 @@ def read_universe() -> list[str]:
     return out
 
 
+# Edge v2 산출물 경로. 리터럴이 스크립트마다 흩어져 있으면 --out-tag 같은 변형이 생겼을 때
+# 검증하는 파일과 측정에 쓰는 파일이 갈린다(verify_stage2는 _full을, 나머지는 기본을 봤다).
+EVENTS_CSV = ROOT / "data" / "insider_events.csv"
+EVENTS_MCAP_CSV = ROOT / "data" / "insider_events_mcap.csv"
+CANDIDATE_CLOSES_CSV = ROOT / "data" / "candidate_closes.csv"
+CANDIDATES_TXT = ROOT / "universe" / "microcap_candidates.txt"
+CANDIDATES_CSV = ROOT / "universe" / "microcap_candidates.csv"
+TOSS_META_CSV = ROOT / "data" / "toss_stock_meta.csv"
+
 COLLECT_REPORT = DATA_RAW / "_collect_report.json"   # 01_collect 산출, 04_verify 게이트 입력
 STALE_MAX_LAG_DAYS = 10       # 이 일수를 넘게 뒤처진 종목이 있으면 검증 실패
 
@@ -49,7 +59,7 @@ STALE_MAX_LAG_DAYS = 10       # 이 일수를 넘게 뒤처진 종목이 있으�
 def stale_symbols(report: dict, max_lag_days: int = STALE_MAX_LAG_DAYS) -> list[tuple[str, int]]:
     """수집 리포트에서 뒤처진 종목을 (symbol, lag) 목록으로 반환.
 
-    01_collect는 수집 실패 시 직전 CSV를 유지하고(개선9) exit 0으로 끝난다. 그 폴백 사실이
+    01_collect는 수집 실패 시 직전 CSV를 유지하고 exit 0으로 끝난다. 그 폴백 사실이
     하류로 전달되지 않으면 6개월 멈춘 종목이 있어도 파이프라인이 성공으로 끝나고, 그 가격이
     학습·예측을 거쳐 잘못된 시그널이 된다. 리포트를 게이트로 삼아 그 경로를 끊는다.
     """
@@ -76,6 +86,41 @@ def _date(s: str):
         return date(y, m, d)
     except (ValueError, AttributeError):
         return None
+
+
+def write_csv_atomic(df, path: Path, **to_csv_kw) -> None:
+    """같은 디렉터리 임시파일에 쓰고 os.replace로 교체한다.
+
+    직접 쓰면 도중에 죽었을 때 잘린 CSV가 남고, 01_collect에서는 그게 **다음 실행의
+    폴백 대상**이 되어 손상이 영속한다. 임시파일은 반드시 같은 디렉터리에 만든다 —
+    os.replace의 원자성은 동일 파일시스템 안에서만 보장된다.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    os.close(fd)
+    try:
+        df.to_csv(tmp, **to_csv_kw)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def write_text_atomic(path: Path, text: str) -> None:
+    """텍스트 산출물용. 위와 같은 이유."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def log(msg: str) -> None:

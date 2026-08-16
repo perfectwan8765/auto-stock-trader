@@ -69,3 +69,31 @@ factor 재계산·달력 드리프트 위험을 없애려 `dump_update`(증분 a
 | `data/raw/*.csv` | yfinance 원본(OHLCV+adjclose) | 무시 |
 | `data/normalized/*.csv` | 정규화(factor 포함) | 무시 |
 | `data/qlib_us/` | Qlib bin (provider_uri) | 무시 |
+
+## make 로 돌리기
+
+의존 관계는 루트 [Makefile](../../Makefile)에 파일 단위로 선언돼 있다. 필요한 선행만 돌아간다.
+
+```bash
+make test              # 테스트 전량
+make bundle-sp500      # S&P500 qlib 번들 재빌드
+make bundle-microcap   # 마이크로캡 번들 (QLIB_UNIVERSE·QLIB_DATASET 자동 설정)
+make check-dag         # 선언된 데이터 노드에 규칙이 다 있는지 확인
+
+make data/events_addv.csv   # 이 산출물과 그 선행만
+```
+
+`universe/microcap_tradable.txt`는 `scripts/toss_probe/06_microcap_coverage.py`가 만드는
+`data/toss_stock_meta.csv`에 의존한다 — 이 디렉터리만 봐서는 알 수 없는 교차 의존이라
+Makefile에 명시돼 있다.
+
+## 스테이지 구조
+
+번호 붙은 파일(`01_collect.py` 등)은 CLI 껍데기이고 로직은 import 가능한 모듈에 있다.
+번호로 시작하는 파일명은 Python 식별자가 아니라 import·단위테스트가 불가능하기 때문이다.
+
+| CLI | 알맹이 |
+|---|---|
+| `01_collect.py` | `collect.py` — `download_one` · `last_date_of` |
+| `02_normalize.py` | `normalize.py` — `normalize_one` |
+| `04_verify.py` | `verify.py` — `stale_in_bundle` · `delisted_symbols` |

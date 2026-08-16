@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 import csv
 import json
@@ -15,6 +17,9 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import EVENTS_CSV  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "issuer_sic.csv"
@@ -51,7 +56,7 @@ def _write(rows: list[dict]) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--events", type=Path, default=ROOT / "data" / "insider_events.csv")
+    ap.add_argument("--events", type=Path, default=EVENTS_CSV)
     args = ap.parse_args()
 
     ciks = read_ciks(args.events)

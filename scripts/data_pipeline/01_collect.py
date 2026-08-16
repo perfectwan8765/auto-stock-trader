@@ -1,6 +1,6 @@
 """Phase 2 · T3: yfinance로 유니버스 일봉 수집 → data/raw/<SYMBOL>.csv
 
-개선9(yfinance 취약성 대응):
+yfinance 취약성 대응:
   - 심볼당 재시도 + 지수 backoff
   - 지속 실패 시 직전 정상 CSV 폴백(있으면 유지, 없으면 실패 리포트)
   - 실패 심볼 요약 출력
@@ -19,69 +19,9 @@ import time
 from datetime import datetime, timezone
 
 import pandas as pd
-import yfinance as yf
 
-from _common import COLLECT_REPORT, DATA_RAW, START_DATE, log, read_universe
-
-MAX_RETRIES = 4
-MIN_ROWS = 200  # 이보다 적으면 수집 실패로 간주(10년치면 수천 행이어야 정상)
-
-# yfinance 원본 → 우리 스키마 컬럼명
-_RENAME = {
-    "Open": "open",
-    "High": "high",
-    "Low": "low",
-    "Close": "close",
-    "Adj Close": "adjclose",
-    "Volume": "volume",
-}
-_COLS = ["date", "open", "high", "low", "close", "adjclose", "volume", "symbol"]
-
-
-def _last_date_of(path) -> str | None:
-    """폴백으로 유지된 CSV의 마지막 날짜 — stale 판정의 근거값."""
-    try:
-        return str(pd.read_csv(path, usecols=["date"])["date"].iloc[-1])[:10]
-    except (OSError, ValueError, KeyError, IndexError):
-        return None
-
-
-def _download_one(symbol: str, start: str) -> pd.DataFrame | None:
-    """한 종목 다운로드. 재시도+backoff. 성공 시 스키마 DataFrame, 실패 시 None."""
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            df = yf.download(
-                symbol,
-                start=start,
-                auto_adjust=False,
-                actions=False,
-                progress=False,
-                threads=False,
-            )
-        except Exception as e:  # 네트워크·스크래퍼 예외 광범위 → 재시도 대상
-            log(f"   [{symbol}] 시도 {attempt}/{MAX_RETRIES} 예외: {e}")
-            df = None
-
-        if df is not None and not df.empty:
-            # 최신 yfinance는 단일 티커도 MultiIndex 컬럼 반환 → 가격 레벨만 남김
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            if "Adj Close" not in df.columns:
-                log(f"   [{symbol}] 'Adj Close' 없음 — auto_adjust 확인 필요, 재시도")
-            elif len(df) >= MIN_ROWS:
-                df = df.rename(columns=_RENAME).reset_index()
-                df = df.rename(columns={"Date": "date"})
-                df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
-                df["symbol"] = symbol
-                return df[_COLS]
-            else:
-                log(f"   [{symbol}] 행 수 부족({len(df)}<{MIN_ROWS}), 재시도")
-
-        if attempt < MAX_RETRIES:
-            backoff = 2**attempt  # 2,4,8s
-            time.sleep(backoff)
-    return None
-
+from _common import write_csv_atomic, COLLECT_REPORT, DATA_RAW, START_DATE, log, read_universe
+from collect import download_one, last_date_of
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -99,18 +39,18 @@ def main() -> None:
 
     for i, sym in enumerate(symbols, 1):
         log(f"[{i}/{len(symbols)}] {sym}")
-        df = _download_one(sym, args.start)
+        df = download_one(sym, args.start)
         out_path = DATA_RAW / f"{sym}.csv"
         if df is not None:
-            df.to_csv(out_path, index=False)
+            write_csv_atomic(df, out_path, index=False)
             log(f"   ✅ {len(df)}행 → {out_path.name}")
             ok.append(sym)
             report[sym] = {"last_date": str(df["date"].iloc[-1])[:10], "stale": False}
         elif out_path.exists():
-            # 폴백: 직전 정상 CSV 유지(개선9)
+            # 폴백: 직전 정상 CSV 유지
             log(f"   ⚠️ 수집 실패 — 기존 {out_path.name} 유지(폴백)")
             kept_stale.append(sym)
-            report[sym] = {"last_date": _last_date_of(out_path), "stale": True}
+            report[sym] = {"last_date": last_date_of(out_path), "stale": True}
         else:
             log(f"   ❌ 수집 실패, 폴백 없음")
             failed.append(sym)

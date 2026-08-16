@@ -17,6 +17,8 @@
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 import collections
 import csv
@@ -28,9 +30,12 @@ from pathlib import Path
 
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import CANDIDATE_CLOSES_CSV  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 CANDIDATES_CSV = ROOT / "universe" / "microcap_candidates.csv"
-PRICES = ROOT / "data" / "candidate_closes.csv"
+PRICES = CANDIDATE_CLOSES_CSV
 OUT = ROOT / "data" / "missing_reason.csv"
 
 UA = "qlib-toss research ax2team@didim.com"

@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 import collections
 import csv
@@ -18,9 +20,12 @@ from datetime import datetime
 import pandas as pd
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 DERA = ROOT / "data" / "dera"
-PRICES = ROOT / "data" / "candidate_closes.csv"
+PRICES = CANDIDATE_CLOSES_CSV
 
 
 def _rows(path: Path):
@@ -167,7 +172,7 @@ def spot_check(events: Path, n: int = 5) -> bool:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--events", type=Path, default=ROOT / "data" / "insider_events_full.csv")
+    ap.add_argument("--events", type=Path, default=EVENTS_CSV)
     ap.add_argument("--quarters", nargs="+", default=None,
                     help="검증할 분기 (기본: data/dera 아래 전부)")
     args = ap.parse_args()

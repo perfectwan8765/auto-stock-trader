@@ -15,6 +15,8 @@ float은 내부자 지분을 뺀 값이라 시총보다 작으므로, 둘 다 �
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 import bisect
 import collections
@@ -27,12 +29,15 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import yfinance as yf
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV, EVENTS_MCAP_CSV, write_csv_atomic
+
 ROOT = Path(__file__).resolve().parents[2]
-EVENTS = ROOT / "data" / "insider_events.csv"
+EVENTS = EVENTS_CSV
 SHARES = ROOT / "data" / "shares_outstanding.csv"
-PRICES = ROOT / "data" / "candidate_closes.csv"
+PRICES = CANDIDATE_CLOSES_CSV
 TRADABLE = ROOT / "universe" / "microcap_tradable.txt"
-OUT_EVENTS = ROOT / "data" / "insider_events_mcap.csv"
+OUT_EVENTS = EVENTS_MCAP_CSV
 OUT_UNIVERSE = ROOT / "universe" / "microcap_by_mcap.txt"
 
 # 이벤트일과 직전 거래일 사이 허용 간극(달력일). 넘으면 가격 없음으로 본다.
@@ -43,60 +48,13 @@ BANDS = [(0, 5e7, "NANO(<$50M)"), (5e7, 3e8, "MICRO($50M~300M)"),
          (3e8, 2e9, "SMALL($300M~2B)"), (2e9, 1e10, "MID($2B~10B)"), (1e10, float("inf"), "LARGE(>$10B)")]
 
 
-def fetch_closes(symbols: list[str], start: str, end: str) -> pd.DataFrame:
-    """종가 패널을 받아 캐시. 재수집 시 adjclose가 소급 변경되므로 캐시를 우선 재사용한다.
-
-    캐시 유효성은 컬럼뿐 아니라 날짜 범위도 본다 — 컬럼만 보면 `--quarters` 확장 시
-    캐시 끝 이후 이벤트가 전부 캐시 마지막 종가를 쓰게 되어 시총이 조용히 틀린다.
-    """
-    df = pd.DataFrame()
-    if PRICES.exists():
-        cached = pd.read_csv(PRICES, index_col=0, parse_dates=True)
-        covers_range = (not cached.empty
-                        and cached.index.min() <= pd.Timestamp(start)
-                        and cached.index.max() >= pd.Timestamp(end) - pd.Timedelta(days=10))
-        missing = [s for s in symbols if s not in cached.columns]
-        if covers_range and not missing:
-            return cached
-        if covers_range:
-            print(f"  캐시 재사용 + 없는 {len(missing)}종목만 추가 수집")
-            df, symbols = cached, missing
-        else:
-            rng = "(빈 캐시)" if cached.empty else f"{cached.index.min():%Y-%m-%d}~{cached.index.max():%Y-%m-%d}"
-            print(f"  캐시 날짜범위 부족 {rng} < 요청 {start}~{end} → 전체 재수집")
-
-    frames, failed, thin = [], [], 0
-    for i in range(0, len(symbols), 100):
-        chunk = symbols[i : i + 100]
-        raw = yf.download(chunk, start=start, end=end, progress=False,
-                          auto_adjust=False, threads=True, group_by="ticker")
-        for s in chunk:
-            # group_by="ticker"면 종목이 1개여도 컬럼이 MultiIndex다(yfinance 1.5.1).
-            try:
-                col = raw[s]["Close"].dropna()
-            except (KeyError, TypeError):
-                failed.append(s)
-                continue
-            if col.empty:
-                failed.append(s)
-                continue
-            # 관측이 적어도 버리지 않는다 — 상장직후·조기폐지가 곧 생존편향 모집단이다.
-            thin += len(col) < 20
-            frames.append(col.rename(s))
-        print(f"  ...{min(i + 100, len(symbols))}/{len(symbols)}")
-
-    if frames:
-        df = pd.concat([df] + frames, axis=1) if len(df) else pd.concat(frames, axis=1)
-    print(f"  수집 실패 {len(failed):,}종목 · 관측 20일 미만 {thin:,}종목(유지)")
-    if failed[:5]:
-        print(f"  실패 예: {', '.join(failed[:5])}")
-    PRICES.parent.mkdir(parents=True, exist_ok=True)
-    # 전량 실패(yfinance 스로틀 등) 시 빈 프레임으로 캐시를 덮으면 수 시간치 수집이 날아가고
-    # 하류가 전부 "결측"으로 읽어 **가짜 kill 판정**을 만든다. 받은 게 없으면 캐시를 건드리지 않는다.
-    if df.empty:
-        raise SystemExit("[중단] 수집 결과가 비어 있다 — 기존 캐시를 보존한다. 재시도할 것")
-    df.to_csv(PRICES)
-    return df
+def load_closes() -> pd.DataFrame:
+    """종가 행렬을 읽는다. 생산은 fetch_candidate_closes.py 담당이다."""
+    if not PRICES.exists():
+        raise SystemExit(
+            f"[오류] {PRICES.name} 없음 — scripts/data_pipeline/fetch_candidate_closes.py 먼저 실행"
+        )
+    return pd.read_csv(PRICES, index_col=0, parse_dates=True)
 
 
 def load_metric(metric: str) -> dict[str, tuple[list[str], list[float]]]:
@@ -171,7 +129,7 @@ def main() -> None:
     dates = sorted({e["filing_date"] for e in events})
     print(f"이벤트 {len(events):,}건 · 종목 {len(symbols):,} · 기간 {dates[0]} ~ {dates[-1]}")
 
-    closes = fetch_closes(symbols, start=dates[0], end=str(pd.Timestamp(dates[-1]) + pd.Timedelta(days=7))[:10])
+    closes = load_closes()
     shares = load_metric("shares")
     floats = load_metric("public_float")
     print(f"가격 확보 {closes.shape[1]:,}종목 · 주식수 {len(shares):,}종목 · public_float {len(floats):,}종목")

@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import sys
+
 import io
 import urllib.request
 import zipfile
@@ -14,6 +16,9 @@ from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import write_csv_atomic  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_BENCH = ROOT / "data" / "benchmarks.csv"
@@ -32,7 +37,7 @@ FF_FILES = {
 def fetch_benchmarks() -> None:
     raw = yf.download(TICKERS, start=START, progress=False, auto_adjust=True)["Close"]
     raw.index = pd.to_datetime(raw.index).tz_localize(None)
-    raw.to_csv(OUT_BENCH)
+    write_csv_atomic(raw, OUT_BENCH)
     print(f"[완료] {OUT_BENCH.relative_to(ROOT)} — {len(raw)}일 × {raw.shape[1]}종목 "
           f"({raw.index.min().date()}~{raw.index.max().date()})")
     print("  결측: " + "  ".join(f"{c} {raw[c].isna().sum()}" for c in raw.columns))
@@ -58,7 +63,7 @@ def fetch_ff() -> None:
     parts = [_read_ff(f, c) for f, c in FF_FILES.items()]
     ff = pd.concat(parts, axis=1).dropna().rename(columns={"Mom": "MOM"})
     ff = ff[ff.index >= START]
-    ff.to_csv(OUT_FF)
+    write_csv_atomic(ff, OUT_FF)
     print(f"\n[완료] {OUT_FF.relative_to(ROOT)} — {len(ff)}일 × {ff.shape[1]}팩터 "
           f"({ff.index.min().date()}~{ff.index.max().date()})")
     print("  연환산 평균: " + "  ".join(f"{c} {ff[c].mean()*252:+.1%}" for c in ff.columns))

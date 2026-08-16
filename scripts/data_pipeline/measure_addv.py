@@ -9,14 +9,19 @@
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import EVENTS_MCAP_CSV, write_csv_atomic
+
 ROOT = Path(__file__).resolve().parents[2]
-EVENTS = ROOT / "data" / "insider_events_mcap.csv"
+EVENTS = EVENTS_MCAP_CSV
 TRADABLE = ROOT / "universe" / "microcap_tradable.txt"
 OUT = ROOT / "data" / "events_addv.csv"
 
@@ -80,7 +85,7 @@ def main() -> None:
 
     out = uni.assign(addv=addv)[
         ["symbol", "cik", "filing_date", "mcap_usd", "mcap_source", "addv"]]
-    out.to_csv(OUT, index=False)
+    write_csv_atomic(out, OUT, index=False)
 
     ok = out[out.addv.notna()]
     print(f"\n[완료] {OUT.relative_to(ROOT)} — 산출 {len(ok)}/{len(out)} ({len(ok)/len(out):.1%})",

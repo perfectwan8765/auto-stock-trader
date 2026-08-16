@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+import sys
+
 import argparse
 import json
 import time
@@ -21,10 +23,13 @@ from pathlib import Path
 
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import CANDIDATES_CSV, CANDIDATE_CLOSES_CSV, EVENTS_CSV, write_csv_atomic
+
 ROOT = Path(__file__).resolve().parents[2]
-CANDIDATES = ROOT / "universe" / "microcap_candidates.csv"
-PRICES = ROOT / "data" / "candidate_closes.csv"
-EVENTS = ROOT / "data" / "insider_events.csv"
+CANDIDATES = CANDIDATES_CSV
+PRICES = CANDIDATE_CLOSES_CSV
+EVENTS = EVENTS_CSV
 OUT_TICKER = ROOT / "data" / "exit_timing.csv"
 OUT_EVENT = ROOT / "data" / "exit_timing_events.csv"
 
@@ -83,7 +88,7 @@ def main() -> None:
                      "last_filing": max(dates) if dates else ""})
 
     t = pd.DataFrame(rows)
-    t.to_csv(OUT_TICKER, index=False)
+    write_csv_atomic(t, OUT_TICKER, index=False)
     print(f"\n조회 성공 {len(t)} — 폐지 {(t.delist_first != '').sum()} · "
           f"파산 {(t.bankrupt_first != '').sum()} · 인수 {(t.acq_first != '').sum()}", flush=True)
 
@@ -96,7 +101,7 @@ def main() -> None:
                 d[f"{key}_gap"] = (pd.Timestamp(col) - f).days if col else None
             recs.append(d)
     g = pd.DataFrame(recs)
-    g.to_csv(OUT_EVENT, index=False)
+    write_csv_atomic(g, OUT_EVENT, index=False)
     print(f"결측 이벤트 {len(g)}\n")
 
     print("=== 퇴출 시점이 보유기간 안에 들어오는 비율 (분모는 각 신호 보유 이벤트) ===")
