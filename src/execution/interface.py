@@ -13,15 +13,15 @@ class OrderIntent:
     side: str            # "BUY" | "SELL"
     kind: str            # "amount"(USD, 매수) | "quantity"(주식수, 매도)
     value: float         # 매수=USD 금액, 매도=주식수
-    client_order_id: str  # 결정적 멱등키(개선5)
+    client_order_id: str  # 결정적 멱등키 — 재시도·재개 시 중복주문 방지
     reason: str          # "exit" | "trim" | "enter" | "add"
 
 
 @dataclass(frozen=True)
 class RebalanceParams:
     total_equity_usd: float   # 총 평가액(목표 비중 → 금액 환산 기준)
-    buying_power_usd: float   # 가용 USD(개선1: 매수는 이 한도 내에서만)
-    min_order_usd: float      # 최소 주문금액(개선8, Phase 0 실측 전 placeholder)
+    buying_power_usd: float   # 매수는 이 한도 내에서만(이번 사이클 매도대금 미포함)
+    min_order_usd: float      # 최소 주문금액
     rebalance_date: str       # YYYYMMDD, 멱등키 재현용
     # no-trade 밴드: 목표 대비 |편차|/목표 가 이 값 이하면 거래하지 않는다.
     # min_order_usd는 집행 하한이지 정책이 아니다 — 실측값이 $1이라 이것만 쓰면
@@ -31,7 +31,7 @@ class RebalanceParams:
 
 @dataclass(frozen=True)
 class RebalancePlan:
-    """리밸런싱 산출물. orders는 실행 순서(매도先→매수, 개선1). skipped는 사유 기록."""
+    """리밸런싱 산출물. orders는 실행 순서(매도先→매수), skipped는 무동작 사유."""
 
     orders: list[OrderIntent]
     # (symbol, reason): within_band | below_min_order | insufficient_buying_power

@@ -205,7 +205,7 @@ class RebalanceRunner:
         # 봇이 멈추면 안 된다.
         if self.cb is not None and self.state.managed and self._account is not None:
             daily = sum(v for s, v in self._account.daily_pnl.items() if s in self.state.managed)
-            # 절대 스냅샷이므로 대입한다. 누적하면 같은 날 재실행마다 이중계상된다(P0-1).
+            # 절대 스냅샷이므로 대입한다. 누적하면 같은 날 재실행마다 이중계상된다.
             self.cb.observe_daily_loss(-daily)
 
         placed: list[str] = []

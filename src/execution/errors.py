@@ -1,6 +1,8 @@
 """execution 레이어 예외 (브로커 비의존 — toss.errors와 독립).
 
-안전장치 정지 신호. CLI/cron 러너가 잡아 정지·알림. 개선10 원칙대로 SystemExit은 CLI에서만.
+안전장치 정지 신호. CLI·cron이 잡아 정지·알림한다.
+SystemExit 변환은 CLI 경계에서만 한다 — 라이브러리가 프로세스를 죽이면 자동화가
+부분 이월·서킷브레이커로 대응할 기회를 잃는다.
 """
 from __future__ import annotations
 

@@ -6,8 +6,8 @@ TossClient(HTTP)를 감싸 리밸런싱 로직에 브로커 능력을 제공한�
 시각([start,end)) 비교로 개장을 판정한다.
 
 파싱 실패 시 정책: **조용히 스킵하지 않고 `TossError`로 중단**한다. holdings를 부분/빈 값으로
-반환하면 화이트리스트(개선14) 제외셋 X가 미완성돼 사용자 수동 보유가 매매 대상이 될 수 있다
-(bypass). 중단은 fail-safe(주문 미발생)이고, TossError는 개선10 예외체계·cron 자동화가 잡는다.
+반환하면 화이트리스트 제외셋 X가 미완성돼 사용자 수동 보유가 매매 대상이 될 수 있다.
+중단은 fail-safe(주문 미발생)이고, TossError는 CLI·cron 자동화가 잡는다.
 """
 from __future__ import annotations
 
@@ -283,7 +283,7 @@ class TossBroker:
             "symbol": intent.symbol,
             "side": intent.side,
             "orderType": "MARKET",
-            "clientOrderId": intent.client_order_id,  # 개선5 멱등키
+            "clientOrderId": intent.client_order_id,  # 멱등키
         }
         if intent.kind == "amount":
             body["orderAmount"] = f"{intent.value}"   # 소수점 매수(US MARKET 전용)
