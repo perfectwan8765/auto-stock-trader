@@ -154,13 +154,14 @@ K=15~20 유지.
 |---|---|---|
 | 계좌 헤더 | `X-Tossinvest-Account` = **`accountSeq`** (`accountNo`는 `400 account-not-found`) | [client.py](../../src/toss/client.py) |
 | 토큰 | `expires_in` ≈ 86400초(24h), 파일 캐시 | [client.py](../../src/toss/client.py) |
-| 소수점 주문 | 금액주문(fractional) 가능 | 유니버스·K 산정 |
+| 소수점 주문 | 금액주문(fractional) 가능. ⚠️ **US는 MARKET 전용** → 지정가로 스프레드를 아끼는 길이 봉쇄된다. 회피책은 fractional 포기 + 정수주 지정가 | 유니버스·K 산정, 비용 가정 |
 | 최소 주문금액 | **≤ $1** ($1 매수 FILLED) → K 상한 사실상 무제한 | `min_order_usd` |
 | 환전 | **자동환전 없음.** KRW 보유·USD 0이면 `422 insufficient-buying-power` → **선환전 필수** | [runner.py](../../src/execution/runner.py), 운영절차 |
 | 결제주기 | **T+2** (`execution.settlementDate`, 영업일) | `not_sellable_settlement` 가드 |
 | ORDER rate-limit | `X-RateLimit-Limit=6`, `Reset=1` → **6주문/초** | `order_sleep_s` |
 | 그룹별 rate-limit | ACCOUNT 1 TPS · ASSET/STOCK 5 · MARKET_DATA 10 | 상동 |
 | 매매 수수료 | **~0.10~0.13%/편도** (매입액 클수록 0.10%에 수렴, 소액은 최소단위 반올림으로 상승) | backtest `open/close_cost` |
+| ★ 수수료 **출처** | **주문 응답의 `commission`은 38건 전부 `0`이다.** 실제 값은 holdings의 `cost.commission`(0.13%)에만 있다 — 주문 응답으로 비용을 추정하면 **수수료를 0으로 착각한다** | [snapshot_holdings.py](../../scripts/live/snapshot_holdings.py) |
 | 매수 거래세 | 없음 (`cost.tax` = null) | 상동 |
 | 매도 fee | SEC/FINRA `tax` 최소 $0.01 (유의미 규모에선 ~0.001%로 무시가능) | 상동 |
 | FX 스프레드 | `basisPoint=3` = **0.03%/편도** (mid 대비), 호가 유효 5분 | 상동 |
@@ -441,6 +442,10 @@ $700 계좌에서 **포트폴리오의 0.14% 드리프트에도 주문이 나갔
 - $700 규모는 수수료·환전·세금 비중 큼 → **학습·검증 목적** 성격
 - 토스 API 샌드박스 없음 → 실환경 소액이 유일한 코드 검증 통로
 - 해외주식 양도소득세(연 250만원 공제 후 22%)·배당 원천징수
+- ★ **무료 데이터로는 PIT 복원이 불가능하다** — yfinance는 폐지 티커의 전 기간을 삭제하며
+  파산뿐 아니라 M&A 폐지도 마찬가지다. 커버리지는 빈티지 나이의 함수라 8년 전 표본은 절반이
+  소멸한다. **과거 표본을 쓰는 모든 검증이 이 편향을 안고 시작한다**
+  ([`study-pitfalls.md`](study-pitfalls.md) §1.1)
 
 ---
 
