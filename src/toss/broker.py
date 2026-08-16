@@ -178,12 +178,17 @@ class TossBroker:
 
         토스는 단건 조회만 받아 심볼 수만큼 왕복한다. ACCOUNT 그룹은 한도가 낮아
         (실측 1 TPS) 연속 호출하면 속도제한에 걸린다.
+
+        **값을 알 수 없는 심볼은 결과에서 뺀다.** 0으로 채우면 러너가 "미결제라 못 판다"로
+        읽어 매도를 조용히 버린다. 키가 없어야 러너의 미조회 가드가 발동한다.
         """
         out: dict[str, float] = {}
         for n, sym in enumerate(symbols):
             if n and self.read_sleep_s > 0:
                 time.sleep(self.read_sleep_s)
-            out[sym] = self.get_sellable_quantity(sym)
+            qty = self.get_sellable_quantity(sym)
+            if qty is not None:
+                out[sym] = qty
         return out
 
     def get_prices(self, symbols: list[str]) -> dict[str, float]:
@@ -243,15 +248,26 @@ class TossBroker:
             return 0.0  # 알 수 없으면 보수적 0 (매수 안 함)
         return _num(result["cashBuyingPower"], "buying-power.cashBuyingPower")
 
-    def get_sellable_quantity(self, symbol: str) -> float:
-        # T+N 미결제분을 제외한 실제 매도가능수량. 보유수량과 다를 수 있어 매도 상한으로 쓴다.
+    def get_sellable_quantity(self, symbol: str) -> float | None:
+        """T+N 미결제분을 제외한 매도가능수량. 보유수량과 달라 매도 상한으로 쓴다.
+
+        **알 수 없으면 `None`이다. 0.0으로 접으면 안 된다** — 러너가 그걸 "미결제라 못 판다"로
+        읽어 매도를 조용히 스킵하고, 청산하려던 포지션을 계속 들고 간다. 매 사이클 반복되므로
+        사실상 영구적이다.
+
+        매수 경로(`get_buying_power_usd`)의 "모르면 0"과 **방향이 반대다.** 거기서 0은
+        "안 사면 그만"이라 보수적이지만, 매도에서 0은 "청산 실패"라 위험하다.
+
+        Returns:
+            매도가능수량. 응답이 dict가 아니거나 `sellableQuantity`가 없으면 `None`.
+        """
         try:
             resp = self._get("/api/v1/sellable-quantity", params={"symbol": symbol})
         except TossApiError as exc:
             raise _normalized(exc) from exc
         result = _result(resp)
         if not isinstance(result, dict) or result.get("sellableQuantity") is None:
-            return 0.0  # 알 수 없으면 보수적 0 (매도 안 함)
+            return None
         return _num(result["sellableQuantity"], "sellable-quantity.sellableQuantity")
 
     def get_order(self, order_id: str) -> dict:

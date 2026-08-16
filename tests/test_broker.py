@@ -103,9 +103,44 @@ def test_sellable_quantity():
     assert b.get_sellable_quantity("AAPL") == 7.665831
 
 
-def test_sellable_missing_is_zero():
+def test_sellable_missing_is_none_not_zero():
+    """★ 알 수 없으면 None이고, 배치 결과에서 키 자체가 빠져야 한다.
+
+    종전 스펙은 "알 수 없으면 보수적 0"이었고 그게 결함이었다. 0을 돌려주면 러너가
+    "미결제라 못 판다"로 읽어 매도를 조용히 버리고, 매 사이클 반복돼 청산이 영영 안 된다.
+    매수 경로(get_buying_power_usd)에서 0은 보수적이지만 매도에서 0은 청산 실패라 위험하다.
+    """
     b = _broker({"/api/v1/sellable-quantity": {"result": {}}})
-    assert b.get_sellable_quantity("AAPL") == 0.0   # 알 수 없으면 보수적 0(매도 안 함)
+    b.read_sleep_s = 0
+    assert b.get_sellable_quantity("AAPL") is None
+    assert b.get_sellable(["AAPL"]) == {}   # 키가 없어야 러너의 미조회 가드가 발동한다
+
+
+def test_missing_sellable_aborts_runner_end_to_end():
+    """★ 어댑터의 "모름"이 러너의 미조회 가드까지 닿아야 한다.
+
+    러너에는 unreported 가드가 있지만(runner.py `_clamp_sells_to_sellable`), 어댑터가 모든
+    키를 0으로 채우면 그 가드는 **절대 발동하지 않는다.** 매도가 not_sellable_settlement로
+    조용히 사라지고 매 사이클 반복된다 — 러너 주석이 막겠다고 명시한 바로 그 상황이다.
+    mock으로는 못 잡으므로 어댑터부터 러너까지 관통해 고정한다.
+    """
+    from execution.errors import ExecutionError
+    from execution.interface import RunnerPolicy
+    from execution.managed import ManagedState
+    from execution.runner import RebalanceRunner
+
+    b = _broker({
+        "/api/v1/holdings": {"result": {"items": [{"symbol": "OLD", "quantity": "3"}]}},
+        "/api/v1/prices": {"result": [{"symbol": "OLD", "lastPrice": "100"},
+                                      {"symbol": "AAPL", "lastPrice": "100"}]},
+        "/api/v1/buying-power": {"result": {"cashBuyingPower": "0"}},
+        "/api/v1/sellable-quantity": {"result": {}},      # 200인데 값이 없다
+    })
+    b.read_sleep_s = 0
+    runner = RebalanceRunner(b, RunnerPolicy(min_order_usd=1.0),
+                             managed_state=ManagedState(managed={"OLD"}, bootstrapped=True))
+    with pytest.raises(ExecutionError, match="매도가능수량 미조회"):
+        runner.run({"AAPL": 1.0}, "20260716", dry_run=True)
 
 
 def test_sellable_bad_value_raises():
