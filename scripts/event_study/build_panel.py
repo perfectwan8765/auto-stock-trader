@@ -34,6 +34,16 @@ MCAP_MAX = 300e6
 ADDV_MIN = 200e3
 
 
+def read_symbols(path: Path) -> set[str]:
+    """유니버스 파일 파서 — 주석(`#`)·빈 줄을 제외한다.
+
+    `read_text().split()`로 읽으면 헤더 주석의 단어가 전부 티커로 들어온다. 지금은 우연히
+    실제 티커와 충돌하지 않지만, 헤더에 대문자 단어 하나만 추가돼도 유령 심볼이 생긴다.
+    """
+    return {t for line in path.read_text().splitlines()
+            if (t := line.strip().upper()) and not t.startswith("#")}
+
+
 def judged_population() -> tuple[pd.DataFrame, pd.DataFrame]:
     """(관측 이벤트, 결측 이벤트) — 사전등록 §9 A-2 (1)의 모집단 정의."""
     obs = pd.read_csv(SPREAD, parse_dates=["filing_date"])
@@ -45,7 +55,7 @@ def judged_population() -> tuple[pd.DataFrame, pd.DataFrame]:
     dl["delistDate"] = pd.to_datetime(dl.delistDate, errors="coerce", utc=True).dt.tz_localize(None)
 
     ev = pd.read_csv(EVENTS_MCAP, parse_dates=["filing_date"])
-    tradable = set(TRADABLE.read_text().split())
+    tradable = read_symbols(TRADABLE)
     dropped = ev[ev.symbol.isin(set(dl.symbol)) & ~ev.symbol.isin(tradable)]
     dropped = dropped.merge(dl[["symbol", "delistDate"]], on="symbol", how="left")
     miss = dropped[(dropped.mcap_usd < MCAP_MAX) & (dropped.filing_date < dropped.delistDate)]
@@ -53,7 +63,12 @@ def judged_population() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def load_prices() -> dict[str, pd.DataFrame]:
-    """종목별 OHLC (배당·분할 조정). 거래정지일은 NaN으로 남아 있다."""
+    """종목별 OHLC (배당·분할 조정).
+
+    ⚠️ 거래정지일(02_normalize가 전 컬럼 NaN으로 둔 행)은 **여기서 제거**된다. 따라서
+    인덱스는 실제 거래일만의 압축 목록이고, "H거래일 보유"가 달력일로는 더 길 수 있다.
+    실측: 진입~청산 달력일 p50 43일 · p99 48일 · 50일 초과 2건(0.1%)이라 영향은 무시할 수준이다.
+    """
     out = {}
     for f in NORM.glob("*.csv"):
         df = pd.read_csv(f, parse_dates=["date"]).set_index("date")

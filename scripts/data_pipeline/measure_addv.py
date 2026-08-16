@@ -38,7 +38,9 @@ def main() -> None:
         return
 
     ev = pd.read_csv(EVENTS, parse_dates=["filing_date"])
-    tradable = set(TRADABLE.read_text().split())
+    # 주석 줄을 걸러야 한다 — split()만 쓰면 헤더 단어가 티커로 섞인다
+    tradable = {t for line in TRADABLE.read_text().splitlines()
+                if (t := line.strip().upper()) and not t.startswith("#")}
     uni = ev[ev.mcap_usd.notna() & ev.symbol.isin(tradable) & (ev.mcap_usd < args.mcap_max)]
     syms = sorted(uni.symbol.unique())
     print(f"대상 {len(syms)}종목 / {len(uni)}이벤트", flush=True)

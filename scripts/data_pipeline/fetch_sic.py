@@ -42,10 +42,19 @@ def fetch(cik: int) -> dict | None:
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             d = json.loads(resp.read())
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError):
+        # JSONDecodeError(ValueError)·IncompleteRead(OSError)까지 잡는다 — 자매 구현
+        # (classify_missing_reason.py·fetch_shares_outstanding.py)과 같은 범위다.
         return None
     return {"cik": cik, "sic": d.get("sic", ""), "sic_description": d.get("sicDescription", ""),
             "entity_name": d.get("name", "")}
+
+
+def _write(rows: list[dict]) -> None:
+    with open(OUT, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["cik", "sic", "sic_description", "entity_name"])
+        w.writeheader()
+        w.writerows(rows)
 
 
 def main() -> None:
@@ -54,6 +63,8 @@ def main() -> None:
     args = ap.parse_args()
 
     ciks = read_ciks(args.events)
+    if not ciks:
+        raise SystemExit(f"[오류] {args.events}에 파싱 가능한 CIK가 없다")
     print(f"CIK {len(ciks):,}건 조회 (약 {len(ciks) * RATE_SLEEP / 60:.0f}분)", flush=True)
 
     rows, missing = [], 0
@@ -65,14 +76,11 @@ def main() -> None:
             missing += 1
         time.sleep(RATE_SLEEP)
         if i % 250 == 0:
+            _write(rows)        # 수천 건 루프라 중간에 죽어도 받은 것은 남긴다
             print(f"  {i}/{len(ciks)}  확보 {len(rows)}  미확보 {missing}", flush=True)
 
-    with open(OUT, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=["cik", "sic", "sic_description", "entity_name"])
-        w.writeheader()
-        w.writerows(rows)
-
-    print(f"\n[완료] {OUT.relative_to(ROOT)} — {len(rows)}/{len(ciks)} ({len(rows)/len(ciks):.1%})")
+    _write(rows)
+    print(f"\n[완료] {OUT.relative_to(ROOT)} — {len(rows)}/{len(ciks)} ({len(rows)/max(len(ciks), 1):.1%})")
     top = {}
     for r in rows:
         top[r["sic_description"]] = top.get(r["sic_description"], 0) + 1
