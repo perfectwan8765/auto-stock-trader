@@ -261,11 +261,7 @@ class TossBroker:
         Returns:
             매도가능수량. 응답이 dict가 아니거나 `sellableQuantity`가 없으면 `None`.
         """
-        try:
-            resp = self._get("/api/v1/sellable-quantity", params={"symbol": symbol})
-        except TossApiError as exc:
-            raise _normalized(exc) from exc
-        result = _result(resp)
+        result = _result(self._get("/api/v1/sellable-quantity", params={"symbol": symbol}))
         if not isinstance(result, dict) or result.get("sellableQuantity") is None:
             return None
         return _num(result["sellableQuantity"], "sellable-quantity.sellableQuantity")

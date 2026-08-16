@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
 
 import requests
+
+from execution.atomic import write_text_atomic
 
 from .config import Config, PROJECT_ROOT
 from .errors import TossAuthError
@@ -73,14 +74,11 @@ class TokenManager:
             "access_token": token,
             "expires_at": time.time() + expires_in,
         }
-        # 자격증명 파생물이므로 소유자만 읽기. **만드는 순간부터** 0600이어야 한다 —
-        # write_text로 만든 뒤 chmod하면 그 사이 토큰이 umask 기본 권한(보통 0644)으로
-        # 디스크에 놓이고, 두 줄 사이에서 죽으면 그대로 남는다. 이미 있던 파일이 느슨하면
-        # O_CREAT의 mode가 적용되지 않으므로 쓰기 전에 fchmod로 조인다.
-        fd = os.open(self.cache_path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            os.fchmod(f.fileno(), 0o600)
-            f.write(json.dumps(payload))
+        # 상태 파일과 같은 헬퍼를 쓴다. mkstemp가 0600으로 만들고 os.replace가 그 모드를
+        # 유지하므로 **만들어지는 순간부터** 소유자 전용이고, 동시에 원자적이다 —
+        # write_text 후 chmod는 그 사이 토큰이 umask 기본 권한(보통 0644)으로 놓이고,
+        # O_TRUNC로 직접 쓰면 쓰기가 실패했을 때 유효하던 옛 캐시가 빈 파일로 남는다.
+        write_text_atomic(self.cache_path, json.dumps(payload))
 
     def _request_new(self) -> tuple[str, int]:
         url = f"{self.cfg.base_url}/oauth2/token"
@@ -114,4 +112,9 @@ class TokenManager:
         token, expires_in = self._request_new()
         if expires_in > 0:
             self._write_cache(token, expires_in)
+        else:
+            # 만료를 모르면 캐시할 수 없다. 그런데 옛 항목을 그대로 두면 **다음** 호출이
+            # 파일 기준으로는 아직 유효한 그 토큰을 되집는다 — 방금 재발급을 부른 이유가
+            # 서버가 그걸 거부해서라면 매 요청이 401을 한 번씩 더 맞는다. 지운다.
+            self.cache_path.unlink(missing_ok=True)
         return token

@@ -117,6 +117,9 @@ def test_401_retry_uses_fresh_token_even_when_cache_not_written(tmp_path):
         assert client.get("/api/v1/holdings") == {"ok": 1}
 
     assert sent == ["Bearer stale", "Bearer fresh"]
+    # 거부된 토큰이 캐시에 남으면 **다음** 요청이 다시 401을 맞는다 — 강제 재발급이
+    # 캐시할 수 없으면(만료 미상) 옛 항목을 지워야 한다.
+    assert not tm.cache_path.exists()
 
 
 def test_request_401_twice_raises_no_second_retry():
