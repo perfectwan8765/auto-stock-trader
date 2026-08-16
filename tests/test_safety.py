@@ -81,3 +81,48 @@ def test_circuit_breaker_corrupt_state_starts_clean(tmp_path):
     path.write_text("{ not json")
     cb = CircuitBreaker(max_orders_per_day=2, max_loss_usd=100.0, path=path, day="20260718")
     assert cb.orders_today == 0
+
+
+def test_daily_loss_not_double_counted_on_rerun(tmp_path):
+    """★ P0-1 회귀: 당일손익은 절대 스냅샷이라 재실행해도 누적되면 안 된다.
+
+    종전에는 record_loss(+=)로 넣어, 같은 날 7번 재실행하면 -$100 손실이 $700으로
+    불어나 상한에 걸렸다. 재기동 우회를 막으려던 영속이 반대로 정당한 매매를 막았다.
+    """
+    path = tmp_path / "cb.json"
+    for _ in range(7):
+        cb = CircuitBreaker(max_orders_per_day=99, max_loss_usd=700.0, path=path, day="20260718")
+        cb.observe_daily_loss(100.0)      # 브로커가 매번 같은 값을 보고한다
+        cb.guard()                        # 트립되면 안 된다
+    assert cb.daily_loss_usd == 100.0
+
+
+def test_daily_loss_absolute_assignment(tmp_path):
+    # 손실이 줄어들면 그대로 줄어야 한다(대입). 이익으로 돌아서면 0.
+    path = tmp_path / "cb.json"
+    cb = CircuitBreaker(max_orders_per_day=99, max_loss_usd=700.0, path=path, day="20260718")
+    cb.observe_daily_loss(300.0)
+    cb.observe_daily_loss(120.0)
+    assert cb.daily_loss_usd == 120.0
+    cb.observe_daily_loss(-50.0)          # 이익 전환
+    assert cb.daily_loss_usd == 0.0
+
+
+def test_guard_sums_daily_and_realized(tmp_path):
+    # 두 축은 합산해서 상한과 비교한다.
+    cb = CircuitBreaker(max_orders_per_day=99, max_loss_usd=100.0,
+                        path=tmp_path / "cb.json", day="20260718")
+    cb.observe_daily_loss(60.0)
+    cb.record_loss(30.0)
+    cb.guard()                            # 90 < 100
+    cb.record_loss(20.0)
+    with pytest.raises(CircuitBreakerTripped):
+        cb.guard()                        # 110 >= 100
+
+
+def test_legacy_state_without_daily_loss(tmp_path):
+    # 구 스키마(daily_loss_usd 없음) 상태 파일도 읽혀야 한다.
+    path = tmp_path / "cb.json"
+    path.write_text('{"day": "20260718", "orders_today": 3, "realized_loss_usd": 5.0}')
+    cb = CircuitBreaker(max_orders_per_day=99, max_loss_usd=100.0, path=path, day="20260718")
+    assert cb.orders_today == 3 and cb.realized_loss_usd == 5.0 and cb.daily_loss_usd == 0.0

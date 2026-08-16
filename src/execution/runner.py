@@ -227,8 +227,8 @@ class RebalanceRunner:
         # 첫 guard()에서 상한 초과 시 트립(주문 0건). 사용자 수동 보유(X)는 제외.
         if self.cb is not None and self.state.managed:
             daily = self.broker.get_daily_pnl_usd(self.state.managed)
-            if daily < 0:
-                self.cb.record_loss(-daily)
+            # 절대 스냅샷이므로 대입한다. 누적하면 같은 날 재실행마다 이중계상된다(P0-1).
+            self.cb.observe_daily_loss(-daily)
 
         placed: list[str] = []
         order_ids: list[tuple[OrderIntent, str]] = []

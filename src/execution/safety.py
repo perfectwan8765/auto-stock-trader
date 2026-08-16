@@ -25,7 +25,8 @@ class CircuitBreaker:
         cb.guard()            # 발주 직전 상한 확인(초과 시 CircuitBreakerTripped)
         broker.place(intent)
         cb.record_order()     # 발주 성공 후 카운트
-        cb.record_loss(usd)   # 실현손실 확인 시 누적(다음 guard에서 반영)
+        cb.observe_daily_loss(usd)  # 브로커가 보고한 당일 손실(절대값). 재실행에 멱등
+        cb.record_loss(usd)         # 개별 실현손실 누적(증분)
     ★ E10 — 상태를 파일로 영속한다. 인메모리만 쓰면 상한에 걸려 멈춘 뒤 프로세스를 다시
     띄우는 것만으로 카운터가 0이 되어 **재시작이 안전판을 우회**한다. `path`를 주면
     기록할 때마다 즉시 저장하므로 루프 중간에 죽어도 반영된 상태로 재개된다.
@@ -33,6 +34,11 @@ class CircuitBreaker:
 
     "일일"의 경계는 호출자가 `day`로 준다(러너는 `rebalance_date`). 저장된 날짜와 다르면
     카운터를 리셋한다 — 시간대 해석에 의존하지 않으려는 것이다.
+
+    ⚠️ 손실 축이 둘인 이유(P0-1): 브로커의 당일손익은 **절대 스냅샷**이라 증분처럼 누적하면
+    같은 날 재실행마다 같은 손실이 다시 더해진다. 인메모리일 때는 매 실행이 0에서 시작해
+    드러나지 않았고, 영속을 붙이자 "재기동 우회 방지"가 반대로 정당한 매매를 막는 오류가 됐다.
+    → 절대값은 `observe_daily_loss`(대입), 증분은 `record_loss`(누적)로 나눈다.
     """
 
     def __init__(self, max_orders_per_day: int, max_loss_usd: float,
@@ -40,7 +46,8 @@ class CircuitBreaker:
         self.max_orders_per_day = max_orders_per_day
         self.max_loss_usd = max_loss_usd
         self.orders_today = 0
-        self.realized_loss_usd = 0.0
+        self.daily_loss_usd = 0.0      # 브로커 보고 당일손실(절대값, 대입)
+        self.realized_loss_usd = 0.0   # 개별 실현손실(증분, 누적)
         self.path = Path(path) if path else None
         self.day = day
         self._restore()
@@ -56,6 +63,7 @@ class CircuitBreaker:
         if self.day is not None and d.get("day") != self.day:
             return
         self.orders_today = int(d.get("orders_today", 0))
+        self.daily_loss_usd = float(d.get("daily_loss_usd", 0.0))   # 구 스키마엔 없다
         self.realized_loss_usd = float(d.get("realized_loss_usd", 0.0))
 
     def _persist(self) -> None:
@@ -65,6 +73,7 @@ class CircuitBreaker:
         self.path.write_text(json.dumps({
             "day": self.day,
             "orders_today": self.orders_today,
+            "daily_loss_usd": round(self.daily_loss_usd, 4),
             "realized_loss_usd": round(self.realized_loss_usd, 4),
         }, indent=2, ensure_ascii=False))
 
@@ -73,16 +82,27 @@ class CircuitBreaker:
             raise CircuitBreakerTripped(
                 f"일일 주문건수 상한 초과: {self.orders_today}/{self.max_orders_per_day}"
             )
-        if self.realized_loss_usd >= self.max_loss_usd:
+        total_loss = self.daily_loss_usd + self.realized_loss_usd
+        if total_loss >= self.max_loss_usd:
             raise CircuitBreakerTripped(
-                f"일일 손실 상한 초과: ${self.realized_loss_usd:.2f}/${self.max_loss_usd:.2f}"
+                f"일일 손실 상한 초과: ${total_loss:.2f}/${self.max_loss_usd:.2f}"
             )
 
     def record_order(self) -> None:
         self.orders_today += 1
         self._persist()   # 주문마다 flush — 루프 중간에 죽어도 재시작이 상한을 우회 못 한다
 
+    def observe_daily_loss(self, usd: float) -> None:
+        """브로커가 보고한 당일 손실(절대값)을 대입한다. 같은 날 몇 번 호출해도 결과가 같다.
+
+        이익이면 0이 된다 — 장중에 손실이 이익으로 돌아섰는데 옛 손실이 남아 있으면
+        상한이 근거 없이 걸린다.
+        """
+        self.daily_loss_usd = max(0.0, usd)
+        self._persist()
+
     def record_loss(self, usd: float) -> None:
+        """개별 실현손실을 누적한다(증분). 절대 스냅샷에는 쓰지 말 것 — P0-1 참조."""
         if usd > 0:
             self.realized_loss_usd += usd
             self._persist()
