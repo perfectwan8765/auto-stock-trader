@@ -10,9 +10,10 @@ import pytest
 
 from execution.errors import CircuitBreakerTripped, ExecutionError, KillSwitchActive
 from conftest import _as_broker_error
-from execution.interface import AccountSnapshot, Fill, OrderIntent
+from execution.interface import AccountSnapshot, Fill, OrderIntent, RebalancePlan
 from execution.managed import ManagedState
-from execution.interface import RunnerPolicy
+from execution.interface import RunnerPolicy, RunResult
+from execution.orderlog import write_order_log
 from execution.runner import RebalanceRunner
 from execution.safety import CircuitBreaker
 
@@ -530,6 +531,28 @@ def test_log_write_failure_does_not_mask_original_exception(tmp_path, monkeypatc
     with pytest.raises(CircuitBreakerTripped):      # OSError가 아니라 원 예외가 올라온다
         _runner(broker, circuit_breaker=cb, log_dir=str(tmp_path)).run(
             TW, "20260718", dry_run=False)
+
+
+def test_dry_run_log_does_not_overwrite_live_log(tmp_path):
+    """★ dry-run 로그가 실발주 원장을 덮어쓰면 안 된다.
+
+    scripts/model_backtest/dry_run_rebalance.py 가 write_order_log를 직접 부르고, 실발주
+    러너도 같은 execution_logs/에 쓴다. 종전에는 파일명이 같아 **실발주한 날 dry-run을
+    한 번만 돌려도 그날 원장이 계획 문서로 덮어써졌다.** 재실행이 정상 흐름이라 밟기 쉽다.
+
+    러너를 통해서는 이 분기에 못 온다 — run()이 dry_run에서 조기 반환해 로그를 쓰지 않는다.
+    실제 dry-run 로그 생산자는 위 스크립트의 직접 호출이므로 여기서도 직접 부른다.
+    """
+    empty = RebalancePlan(orders=[], skipped=[])
+    live_path = write_order_log(RunResult(plan=empty, dry_run=False, placed=["rb-live"]),
+                                "20260718", tmp_path)
+    dry_path = write_order_log(RunResult(plan=empty, dry_run=True), "20260718", tmp_path)
+
+    assert live_path.name == "rebalance_20260718.json"
+    assert dry_path.name == "rebalance_20260718.dryrun.json"
+    assert json.loads(live_path.read_text())["placed"] == ["rb-live"]   # 살아남았다
+    # 대시보드의 glob("rebalance_*.json")이 둘 다 잡아야 한다 — 소비자는 무수정이다.
+    assert len(list(tmp_path.glob("rebalance_*.json"))) == 2
 
 
 def test_market_closed_result_keeps_snapshot_and_is_logged(tmp_path):
