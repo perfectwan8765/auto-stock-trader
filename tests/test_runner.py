@@ -510,7 +510,7 @@ def test_order_log_written_when_run_aborts_with_exception(tmp_path):
         _runner(broker, circuit_breaker=cb, log_dir=str(tmp_path)).run(
             TW, "20260718", dry_run=False)
 
-    logged = json.loads((tmp_path / "rebalance_20260718.json").read_text())
+    logged = json.loads((tmp_path / "rebalance_20260718.aborted.json").read_text())
     assert len(logged["placed"]) == 1                      # 나간 주문이 기록됐다
     assert logged["placed"][0] == broker.placed[0].client_order_id
     assert logged["aborted_reason"] == "aborted_error:CircuitBreakerTripped"
@@ -566,6 +566,39 @@ def test_market_closed_result_keeps_snapshot_and_is_logged(tmp_path):
     res = _runner(broker, log_dir=str(tmp_path)).run(TW, "20260718", dry_run=False)
 
     assert res.aborted_reason == "market_closed" and res.snapshot is not None
-    logged = json.loads((tmp_path / "rebalance_20260718.json").read_text())
+    logged = json.loads((tmp_path / "rebalance_20260718.market-closed.json").read_text())
     assert logged["aborted_reason"] == "market_closed"
     assert logged["snapshot"]["target_weights"] == TW
+
+
+def test_terminal_paths_do_not_overwrite_live_ledger(tmp_path):
+    """★ 종료 경로가 다르면 파일도 달라야 한다 — 뒤에 끝난 실행이 원장을 지우면 안 된다.
+
+    `date`는 리밸 일자(=시그널 날짜)라 같은 시그널을 며칠 재사용하면 여러 실행이 같은 date를
+    쓴다(--max-age-days 기본 5). 갈라두지 않으면 장 종료 후 --confirm을 한 번만 더 해도
+    market_closed가 placed=[] 로 그날 체결 기록을 덮어쓴다. is_market_open은 파싱 실패도
+    닫힘으로 접으므로 스키마가 어긋나면 매 실행이 원장을 지운다.
+    """
+    live = _runner(MockBroker(buying_power=700.0), log_dir=str(tmp_path))
+    live.run(TW, "20260718", dry_run=False)
+    ledger = tmp_path / "rebalance_20260718.json"
+    before = json.loads(ledger.read_text())
+    assert len(before["placed"]) == 2
+
+    # 같은 date로 장마감 재실행 — 원장을 건드리면 안 된다.
+    _runner(MockBroker(market_open=False), log_dir=str(tmp_path)).run(
+        TW, "20260718", dry_run=False)
+    assert json.loads(ledger.read_text()) == before
+
+    # 예외 중단도 마찬가지.
+    cb = CircuitBreaker(max_orders_per_day=0, max_loss_usd=1e9)
+    with pytest.raises(CircuitBreakerTripped):
+        _runner(MockBroker(buying_power=700.0), circuit_breaker=cb,
+                log_dir=str(tmp_path)).run(TW, "20260718", dry_run=False)
+    assert json.loads(ledger.read_text()) == before
+
+    assert {p.name for p in tmp_path.glob("rebalance_*.json")} == {
+        "rebalance_20260718.json",
+        "rebalance_20260718.market-closed.json",
+        "rebalance_20260718.aborted.json",
+    }
