@@ -75,8 +75,8 @@ SKIP_REASON = {
     "partial_insufficient_buying_power": "매수여력 부족(부분)",
     "excluded_manual": "수동보유 제외",
     "not_sellable_settlement": "미결제(매도불가)",
-    "sell_clamped_to_sellable": "매도가능수량으로 축소",
 }
+# sell_clamped_to_sellable은 여기 없다 — 스킵이 아니라 발주된 주문이라 별도로 렌더한다.
 
 
 def equity_chart(report: pd.DataFrame) -> alt.Chart:
@@ -399,9 +399,19 @@ def render_orders():
         st.dataframe(style_gubun(disp), width="stretch", hide_index=True)
         st.caption("금액/수량: 매수는 USD 금액, 매도는 주식수. 주문ID = 결정적 멱등키(중복 발주 방지).")
 
-    if data["skipped"]:
+    # sell_clamped_to_sellable은 **발주된** 주문이다(수량만 줄었다). skipped에 함께 담겨
+    # 오지만 "스킵된 주문" 표에 넣으면 운영자가 매도가 안 나간 줄 알고 수동으로 한 번 더 낸다.
+    clamped = [s for s, r in data["skipped"] if r == "sell_clamped_to_sellable"]
+    skipped = [(s, r) for s, r in data["skipped"] if r != "sell_clamped_to_sellable"]
+
+    if clamped:
+        st.info("매도가능수량(T+N)으로 **축소되어 발주된** 종목: "
+                + ", ".join(f"{s}({names.get(s, s)})" for s in clamped)
+                + " — 스킵이 아니라 부분매도다. 잔량은 다음 사이클로 이월된다.")
+
+    if skipped:
         st.markdown("**스킵된 주문**")
-        sk = pd.DataFrame(data["skipped"], columns=["symbol", "reason"])
+        sk = pd.DataFrame(skipped, columns=["symbol", "reason"])
         st.dataframe(pd.DataFrame({
             "종목": sk["symbol"],
             "종목명": sk["symbol"].map(lambda s: names.get(s, s)),

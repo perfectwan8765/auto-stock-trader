@@ -123,7 +123,11 @@ class Broker(Protocol):
     """
 
     def snapshot(self, target_symbols: list[str]) -> AccountSnapshot: ...
-    def get_sellable(self, symbols: list[str]) -> dict[str, float]: ...  # T+N 미결제분 제외
+    # T+N 미결제분을 제외한 매도가능수량.
+    # ⚠️ **값을 알 수 없는 심볼은 결과에 키를 넣지 않는다.** 0으로 채우면 러너가 "미결제라
+    # 못 판다"로 읽어 매도를 조용히 버리고 매 사이클 반복한다. 러너의 미조회 중단 가드가
+    # 이 계약에 의존하므로, 지키지 않는 구현은 가드를 죽은 코드로 만든다(무음 회귀).
+    def get_sellable(self, symbols: list[str]) -> dict[str, float]: ...
     def is_market_open(self) -> bool: ...
     def place(self, intent: OrderIntent) -> str: ...         # 실발주(멱등키 포함) → 주문 ID
     def get_fill(self, order_id: str) -> Fill | None: ...    # 체결 실측. 미체결·미지원이면 None
