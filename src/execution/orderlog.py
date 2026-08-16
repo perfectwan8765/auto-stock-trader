@@ -24,6 +24,8 @@ def write_order_log(result: RunResult, date: str, out_dir: Path, signal_name: st
         "skipped": [list(s) for s in result.plan.skipped],
         "placed": list(result.placed),
         "rejected": [list(r) for r in result.rejected],
+        "snapshot": result.snapshot,   # 결정 시점 입력 — 슬리피지 계산의 기준가
+        "fills": list(result.fills),   # 체결 실측 — 슬리피지·실효 수수료의 출처
     }
     path = out_dir / f"rebalance_{date}.json"
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))

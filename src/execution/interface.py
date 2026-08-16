@@ -23,6 +23,10 @@ class RebalanceParams:
     buying_power_usd: float   # 가용 USD(개선1: 매수는 이 한도 내에서만)
     min_order_usd: float      # 최소 주문금액(개선8, Phase 0 실측 전 placeholder)
     rebalance_date: str       # YYYYMMDD, 멱등키 재현용
+    # no-trade 밴드: 목표 대비 |편차|/목표 가 이 값 이하면 거래하지 않는다.
+    # min_order_usd는 집행 하한이지 정책이 아니다 — 실측값이 $1이라 이것만 쓰면
+    # 포트폴리오의 0.14% 드리프트에도 주문이 나간다. 근거는 qlib-toss.md Phase 5.5.
+    rebalance_band: float = 0.10
 
 
 @dataclass(frozen=True)
@@ -43,3 +47,4 @@ class Broker(Protocol):
     def get_daily_pnl_usd(self, symbols: set[str]) -> float: ...  # 당일 손익 합(음수=손실)
     def is_market_open(self) -> bool: ...
     def place(self, intent: OrderIntent) -> dict: ...        # 실발주(멱등키 포함)
+    def get_order(self, order_id: str) -> dict: ...          # 체결 조회(averageFilledPrice)

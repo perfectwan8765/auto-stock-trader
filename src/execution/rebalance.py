@@ -6,6 +6,9 @@
 - 개선5 결정적 멱등키: clientOrderId = hash(리밸일자+symbol+side+금액). 재시도·크래시 재개 시 동일.
 - 개선8 최소금액: 목표 매수액이 최소주문금액 미만이면 스킵(사유 기록). 상위 갭 우선 배분.
 - 매도先→매수 순서(자금 확보). 매도 대상: 편출(exit) 전량 + 초과보유(trim).
+- no-trade 밴드: 목표 대비 편차가 `rebalance_band` 이내면 거래하지 않는다. Vanguard의
+  1926–2018 표에서 연 10% 임계(14회)와 월 0% 임계(1,116회)의 수익률이 8.20%로 같았다 —
+  회전만 80배다. 상세·출처는 qlib-toss.md Phase 5.5.
 """
 from __future__ import annotations
 
@@ -42,6 +45,16 @@ def compute_rebalance(
     def current_usd(sym: str) -> float:
         return holdings.get(sym, 0.0) * prices.get(sym, 0.0)
 
+    def within_band(sym: str) -> bool:
+        """목표 대비 편차가 밴드 안이면 손대지 않는다.
+
+        편출(target에 없는 종목)에는 적용하지 않는다 — 그건 드리프트가 아니라 편입 해제다.
+        """
+        tgt = target_usd.get(sym, 0.0)
+        if tgt <= 0:
+            return False
+        return abs(current_usd(sym) - tgt) <= tgt * params.rebalance_band
+
     # --- 매도(先): 편출 전량 + 초과보유 trim ---
     for sym, qty in holdings.items():
         if qty <= 0:
@@ -51,6 +64,8 @@ def compute_rebalance(
 
     for sym in target_usd:
         price = prices.get(sym, 0.0)
+        if within_band(sym):
+            continue
         excess = current_usd(sym) - target_usd[sym]
         if excess > params.min_order_usd and price > 0:
             qty = round(excess / price, 8)  # 소수점 주식수 정규화(문자열화 오차 방지)
@@ -59,6 +74,8 @@ def compute_rebalance(
     # --- 매수(後): 가용 USD 한도 내 greedy(큰 갭 우선), 최소금액·이월 처리 ---
     buys = []
     for sym in target_usd:
+        if within_band(sym):
+            continue
         gap = target_usd[sym] - current_usd(sym)
         if gap <= 0:
             continue

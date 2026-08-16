@@ -79,6 +79,25 @@ class TossBroker:
             out[str(sym)] = _num(qty, "holdings.quantity")
         return out
 
+    def get_holdings_raw(self) -> list[dict]:
+        """holdings 응답 항목을 파싱 없이 그대로 반환.
+
+        get_holdings는 symbol·quantity만 취하는데, 실제 비용은 `cost.commission`에 있다
+        (주문 응답의 commission은 전부 0이다 — Phase 0 실측). 비용 캘리브레이션의 입력.
+
+        Returns:
+            result.items[] 원소를 그대로 담은 리스트.
+        Raises:
+            TossError: 응답 형태가 예상과 다를 때.
+        """
+        result = _result(self.client.get("/api/v1/holdings"))
+        if not isinstance(result, dict):
+            raise TossError(f"[응답 파싱] holdings 예상 밖 형태: {type(result).__name__}")
+        items = result.get("items", [])
+        if not isinstance(items, list):
+            raise TossError("[응답 파싱] holdings.items가 리스트가 아님")
+        return items
+
     def get_prices(self, symbols: list[str]) -> dict[str, float]:
         resp = self.client.get("/api/v1/prices", params={"symbols": ",".join(symbols)})
         items = _result(resp)
@@ -161,6 +180,22 @@ class TossBroker:
             if amount is not None:
                 total += _num(amount, "holdings.dailyProfitLoss.amount")
         return total
+
+    def get_order(self, order_id: str) -> dict:
+        """주문 단건 조회. 체결가(`execution.averageFilledPrice`)의 유일한 출처다.
+
+        발주 응답에는 체결 정보가 없고 `{orderId, clientOrderId}`뿐이라, 슬리피지를 재려면
+        이 조회가 필요하다. 시장가 주문이라 발주 직후에는 아직 미체결일 수 있다.
+
+        Returns:
+            result dict. 미체결이면 `execution`이 없거나 비어 있다.
+        Raises:
+            TossError: 응답이 dict가 아닐 때.
+        """
+        result = _result(self.client.get(f"/api/v1/orders/{order_id}"))
+        if not isinstance(result, dict):
+            raise TossError(f"[응답 파싱] orders/{{id}} 예상 밖 형태: {type(result).__name__}")
+        return result
 
     def is_market_open(self) -> bool:
         resp = self.client.get("/api/v1/market-calendar/US", need_account=False)

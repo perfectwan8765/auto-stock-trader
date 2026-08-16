@@ -41,6 +41,10 @@ class RunResult:
     placed: list[str] = field(default_factory=list)          # 발주된 clientOrderId
     rejected: list[tuple[str, str]] = field(default_factory=list)  # (symbol, error_code) 개별 거부
     aborted_reason: str | None = None                        # 예: "market_closed"
+    fills: list[dict] = field(default_factory=list)          # 체결 실측(슬리피지 계산 입력)
+    # 결정 시점 입력. 사후에 "왜 이 주문이 나갔나"를 재구성하려면 그때 본 값이 있어야 한다.
+    # 슬리피지(체결가 − 결정가) 계산의 기준가도 여기서 나온다.
+    snapshot: dict | None = None
 
 
 class RebalanceRunner:
@@ -53,12 +57,14 @@ class RebalanceRunner:
         kill_switch_path: str | None = None,
         circuit_breaker: CircuitBreaker | None = None,
         log_dir: str | None = None,
+        rebalance_band: float = 0.10,     # no-trade 밴드(qlib-toss.md Phase 5.5). 성과 보고 조정 금지
         order_sleep_s: float = 1.0,       # 주문 간 간격. ORDER 그룹 실측 6주문/초(0-7)이나 ACCOUNT 1 TPS에 맞춰 보수적
         rate_limit_retries: int = 3,      # rate-limit-exceeded 재시도 상한
         rate_limit_backoff_s: float = 2.0,
     ):
         self.broker = broker
         self.min_order_usd = min_order_usd
+        self.rebalance_band = rebalance_band
         self.budget_usd = budget_usd
         self.state = managed_state if managed_state is not None else ManagedState(path=None)
         self.kill_switch_path = kill_switch_path
@@ -106,8 +112,19 @@ class RebalanceRunner:
             total_equity = self.budget_usd
             buying_power = max(0.0, min(account_bp, self.budget_usd - bot_value))
 
-        params = RebalanceParams(total_equity, buying_power, self.min_order_usd, rebalance_date)
+        params = RebalanceParams(total_equity, buying_power, self.min_order_usd, rebalance_date,
+                                 rebalance_band=self.rebalance_band)
         plan = compute_rebalance(target, bot_holdings, prices, params)
+        self._snapshot = {
+            "target_weights": dict(target_weights),
+            "prices": dict(prices),
+            "holdings": dict(bot_holdings),
+            "total_equity_usd": params.total_equity_usd,
+            "buying_power_usd": params.buying_power_usd,
+            "min_order_usd": params.min_order_usd,
+            "rebalance_band": params.rebalance_band,
+            "excluded_targets": list(excluded_targets),
+        }
         plan = self._clamp_sells_to_sellable(plan)  # B: T+N 미결제분 초과매도 방지
         if excluded_targets:  # frozen plan 직접 mutate 대신 재구성(F3)
             plan = RebalancePlan(
@@ -141,12 +158,13 @@ class RebalanceRunner:
 
     def _place_order(self, order: OrderIntent) -> tuple[str, str | None]:
         """단건 발주. rate-limit은 백오프 재시도, 장마감/개별거부는 코드로 분류 반환.
-        반환: ("placed", None) | ("skip", code) | ("abort", code). 알 수 없는 오류는 재-raise."""
+        반환: ("placed", orderId) | ("skip", code) | ("abort", code). 알 수 없는 오류는 재-raise."""
         attempts = 0
         while True:
             try:
-                self.broker.place(order)
-                return ("placed", None)
+                resp = self.broker.place(order)
+                result = resp.get("result", resp) if isinstance(resp, dict) else {}
+                return ("placed", (result or {}).get("orderId"))
             except Exception as exc:  # noqa: BLE001 — 아래서 코드 미해당이면 재-raise
                 code = _error_code(exc)
                 if code in _RATE_LIMIT_CODES and attempts < self.rate_limit_retries:
@@ -159,10 +177,38 @@ class RebalanceRunner:
                     return ("skip", code)
                 raise  # 미분류(버그·미지의 코드) → 안전하게 상위로 전파(중단)
 
+    def _collect_fills(self, order_ids: list[tuple[OrderIntent, str]]) -> list[dict]:
+        """발주한 주문의 체결 실측을 회수한다. 실패해도 발주 결과를 버리지 않는다.
+
+        시장가라도 조회 시점에 아직 미체결일 수 있다 — 그 경우 `execution`이 비어 있고,
+        빈 채로 기록한다. 나중에 다시 조회해 채우는 편이 추정으로 메우는 것보다 낫다.
+        """
+        if not order_ids or not hasattr(self.broker, "get_order"):
+            return []
+        out = []
+        for intent, order_id in order_ids:
+            row = {"symbol": intent.symbol, "side": intent.side,
+                   "client_order_id": intent.client_order_id, "order_id": order_id}
+            try:
+                ex = (self.broker.get_order(order_id) or {}).get("execution") or {}
+                row.update({
+                    "filled_quantity": ex.get("filledQuantity"),
+                    "avg_filled_price": ex.get("averageFilledPrice"),
+                    "filled_amount": ex.get("filledAmount"),
+                    "commission": ex.get("commission"),
+                    "tax": ex.get("tax"),
+                    "filled_at": ex.get("filledAt"),
+                })
+            except Exception as exc:  # noqa: BLE001 — 조회 실패가 발주 기록을 날리면 안 된다
+                row["fetch_error"] = _error_code(exc) or type(exc).__name__
+            out.append(row)
+        return out
+
     def run(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool = True) -> RunResult:
+        self._snapshot: dict | None = None
         plan = self._build_plan(target_weights, rebalance_date, dry_run)
         if dry_run:
-            return RunResult(plan=plan, dry_run=True)
+            return RunResult(plan=plan, dry_run=True, snapshot=self._snapshot)
 
         # --- 실발주: 안전장치 ---
         if self.kill_switch_path:
@@ -178,6 +224,7 @@ class RebalanceRunner:
                 self.cb.record_loss(-daily)
 
         placed: list[str] = []
+        order_ids: list[tuple[OrderIntent, str]] = []
         rejected: list[tuple[str, str]] = []
         aborted_reason: str | None = None
         # try/finally: guard()가 루프 중간에 트립(주문건수·손실 상한)해도 이미 발주된
@@ -191,6 +238,8 @@ class RebalanceRunner:
                 outcome, code = self._place_order(order)
                 if outcome == "placed":
                     placed.append(order.client_order_id)
+                    if code:
+                        order_ids.append((order, code))
                     if self.cb is not None:
                         self.cb.record_order()
                 elif outcome == "skip":
@@ -203,7 +252,8 @@ class RebalanceRunner:
             self.state.save()
 
         result = RunResult(plan=plan, dry_run=False, placed=placed,
-                           rejected=rejected, aborted_reason=aborted_reason)
+                           rejected=rejected, aborted_reason=aborted_reason,
+                           snapshot=self._snapshot, fills=self._collect_fills(order_ids))
         if self.log_dir:
             from pathlib import Path
 

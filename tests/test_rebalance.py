@@ -10,7 +10,8 @@ from execution.rebalance import compute_rebalance, make_client_order_id
 
 
 def _params(**kw):
-    base = dict(total_equity_usd=700.0, buying_power_usd=700.0, min_order_usd=1.0, rebalance_date="20260718")
+    base = dict(total_equity_usd=700.0, buying_power_usd=700.0, min_order_usd=1.0,
+                rebalance_date="20260718", rebalance_band=0.0)  # 밴드 검증 외에는 종전 동작 유지
     base.update(kw)
     return RebalanceParams(**base)
 
@@ -91,3 +92,27 @@ def test_no_trade_when_on_target():
     # 이미 목표와 일치 → 주문 없음.
     plan = compute_rebalance({"AAPL": 1.0}, {"AAPL": 7.0}, {"AAPL": 100}, _params())
     assert plan.orders == []
+
+
+def test_band_suppresses_small_drift():
+    # 목표 350, 현재 370 → 편차 5.7% < 밴드 10% → 주문 없음.
+    p = _params(rebalance_band=0.10)
+    plan = compute_rebalance({"AAPL": 0.5, "MSFT": 0.5}, {"AAPL": 3.7, "MSFT": 3.3},
+                             {"AAPL": 100, "MSFT": 100}, p)
+    assert plan.orders == []
+
+
+def test_band_allows_large_drift():
+    # 목표 350, 현재 500/200 → 편차 42.9% > 밴드 10% → 양쪽 다 거래.
+    p = _params(rebalance_band=0.10)
+    plan = compute_rebalance({"AAPL": 0.5, "MSFT": 0.5}, {"AAPL": 5.0, "MSFT": 2.0},
+                             {"AAPL": 100, "MSFT": 100}, p)
+    assert [o.side for o in plan.orders] == ["SELL", "BUY"]
+
+
+def test_band_does_not_block_exit():
+    # 편출은 드리프트가 아니라 편입 해제 → 밴드와 무관하게 전량 매도.
+    p = _params(rebalance_band=0.99)
+    plan = compute_rebalance({"AAPL": 1.0}, {"AAPL": 7.0, "MSFT": 0.1},
+                             {"AAPL": 100, "MSFT": 100}, p)
+    assert [(o.symbol, o.side, o.reason) for o in plan.orders] == [("MSFT", "SELL", "exit")]

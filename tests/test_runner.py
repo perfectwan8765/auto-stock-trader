@@ -32,6 +32,7 @@ class MockBroker:
         self._daily_pnl = daily_pnl or {}          # symbol -> 당일손익
         self._place_errors = place_errors or {}    # symbol -> [code, ...] 순차 raise 후 성공
         self.placed: list[OrderIntent] = []
+        self._orders: dict[str, OrderIntent] = {}
 
     def get_holdings(self):
         return dict(self._holdings)
@@ -56,7 +57,17 @@ class MockBroker:
         if errs:
             raise _ApiErr(errs.pop(0))
         self.placed.append(intent)
-        return {"clientOrderId": intent.client_order_id, "status": "ACCEPTED"}
+        oid = f"ord-{len(self.placed)}"
+        self._orders[oid] = intent
+        return {"result": {"orderId": oid, "clientOrderId": intent.client_order_id}}
+
+    def get_order(self, order_id):
+        # 실 응답 구조(qlib-toss.md Phase 0): result.execution.{filledQuantity, averageFilledPrice, ...}
+        intent = self._orders.get(order_id)
+        if intent is None:
+            return {}
+        return {"execution": {"filledQuantity": "1", "averageFilledPrice": "101.5",
+                              "filledAmount": "101.5", "commission": "0.1", "tax": "0"}}
 
 
 def _runner(broker, **kw):
@@ -214,3 +225,39 @@ def test_unknown_error_propagates():
     broker = MockBroker(place_errors={"AAPL": ["some-unexpected-code"]})
     with pytest.raises(Exception):
         _runner(broker).run({"AAPL": 1.0}, "20260716", dry_run=False)
+
+
+def test_fills_captured_with_order_id():
+    # 발주 응답의 orderId로 체결을 되받아 RunResult.fills에 담는다(슬리피지 계산 입력).
+    b = MockBroker(prices={"AAPL": 100.0})
+    res = _runner(b).run({"AAPL": 1.0}, "20260718", dry_run=False)
+    assert len(res.fills) == 1
+    f = res.fills[0]
+    assert f["symbol"] == "AAPL" and f["order_id"] == "ord-1"
+    assert f["avg_filled_price"] == "101.5" and f["commission"] == "0.1"
+
+
+class _NoQueryBroker(MockBroker):
+    """체결 조회를 지원하지 않는 브로커 — get_order 없이도 발주는 돌아야 한다."""
+
+    get_order = None
+
+    def __getattribute__(self, name):
+        if name == "get_order":
+            raise AttributeError(name)
+        return super().__getattribute__(name)
+
+
+def test_fills_empty_when_broker_cannot_query():
+    b = _NoQueryBroker(prices={"AAPL": 100.0})
+    res = _runner(b).run({"AAPL": 1.0}, "20260718", dry_run=False)
+    assert res.placed and res.fills == []
+
+
+def test_snapshot_records_decision_inputs():
+    # 결정 시점 입력(가격·밴드·예수금)이 남아야 사후에 주문 근거를 재구성할 수 있다.
+    b = MockBroker(prices={"AAPL": 100.0}, buying_power=500.0)
+    res = _runner(b, rebalance_band=0.10).run({"AAPL": 1.0}, "20260718", dry_run=True)
+    assert res.snapshot["prices"]["AAPL"] == 100.0
+    assert res.snapshot["rebalance_band"] == 0.10
+    assert res.snapshot["buying_power_usd"] == 500.0
