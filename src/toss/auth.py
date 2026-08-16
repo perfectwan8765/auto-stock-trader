@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -72,9 +73,14 @@ class TokenManager:
             "access_token": token,
             "expires_at": time.time() + expires_in,
         }
-        self.cache_path.write_text(json.dumps(payload))
-        # 자격증명 파생물이므로 소유자만 읽기
-        self.cache_path.chmod(0o600)
+        # 자격증명 파생물이므로 소유자만 읽기. **만드는 순간부터** 0600이어야 한다 —
+        # write_text로 만든 뒤 chmod하면 그 사이 토큰이 umask 기본 권한(보통 0644)으로
+        # 디스크에 놓이고, 두 줄 사이에서 죽으면 그대로 남는다. 이미 있던 파일이 느슨하면
+        # O_CREAT의 mode가 적용되지 않으므로 쓰기 전에 fchmod로 조인다.
+        fd = os.open(self.cache_path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), 0o600)
+            f.write(json.dumps(payload))
 
     def _request_new(self) -> tuple[str, int]:
         url = f"{self.cfg.base_url}/oauth2/token"

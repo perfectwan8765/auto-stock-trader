@@ -290,7 +290,7 @@ class TossBroker:
         resp = self._get("/api/v1/market-calendar/US", need_account=False)
         return _regular_market_open(resp, datetime.now(timezone.utc))
 
-    def place(self, intent: OrderIntent) -> dict:
+    def place(self, intent: OrderIntent) -> str:
         # 모든 숫자 필드는 문자열(API 규약)
         body = {
             "symbol": intent.symbol,

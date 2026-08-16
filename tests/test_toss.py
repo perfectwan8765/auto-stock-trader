@@ -6,6 +6,7 @@ mock으로 requests를 대체해 실 API 없이 검증. 개선11(401 재시도)�
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -90,6 +91,34 @@ def test_request_retries_once_on_401():
     gt.assert_any_call(force_refresh=True)     # 재시도 전 토큰 강제 재발급
 
 
+def test_401_retry_uses_fresh_token_even_when_cache_not_written(tmp_path):
+    """★ 재발급 토큰을 버리고 캐시를 다시 읽으면 거부된 옛 토큰을 재전송한다.
+
+    _write_cache는 expires_in > 0 일 때만 쓴다. 응답에 expires_in이 없거나 0이면 캐시가
+    갱신되지 않고, _headers가 get_token() -> _read_cache()로 (파일 기준) 아직 유효한 옛
+    항목을 돌려준다. 그 토큰은 서버가 이미 거부했으니 재시도도 401이고, _retry=True라
+    TossApiError로 끝난다 — 401 복구가 영구 불능이 된다.
+    """
+    cfg = _cfg()
+    tm = TokenManager(cfg, cache_path=tmp_path / "tok.json")
+    tm.cache_path.write_text(
+        '{"client_id": "cid", "access_token": "stale", "expires_at": %d}' % int(time.time() + 3600)
+    )
+    client = TossClient(cfg, token_manager=tm)
+    sent = []
+
+    def capture(method, url, headers=None, **kw):
+        sent.append(headers["Authorization"])
+        return _resp(401, {}) if len(sent) == 1 else _resp(200, {"ok": 1})
+
+    # 재발급 자체는 성공하지만 expires_in=0 이라 캐시에 남지 않는다.
+    with mock.patch.object(tm, "_request_new", return_value=("fresh", 0)), \
+         mock.patch.object(client.session, "request", side_effect=capture):
+        assert client.get("/api/v1/holdings") == {"ok": 1}
+
+    assert sent == ["Bearer stale", "Bearer fresh"]
+
+
 def test_request_401_twice_raises_no_second_retry():
     client = TossClient(_cfg())
     with mock.patch.object(client.tokens, "get_token", return_value="tok"), \
@@ -158,6 +187,34 @@ def test_auth_missing_token_raises_auth_error():
 
 
 # --- 토큰 캐싱 (expires_in 기반) ---
+
+def test_token_cache_file_is_owner_only(tmp_path, monkeypatch):
+    """★ 토큰 캐시는 **만들어지는 순간부터** 0600이어야 한다.
+
+    종전에는 write_text로 만든 뒤 chmod했다. 그 사이 브로커 액세스 토큰이 umask 기본
+    권한(보통 0644)으로 디스크에 놓이고, 두 줄 사이에서 프로세스가 죽으면 영구히 0644로 남는다.
+
+    최종 모드만 보면 종전 구현도 통과하므로(chmod가 결국 조인다) 경합을 못 잡는다.
+    사후 `Path.chmod`를 무력화해 **그 안전망 없이도** 파일이 0600인지 본다 — 그게 "만들어지는
+    순간부터 0600"의 검증 가능한 형태다.
+    """
+    monkeypatch.setattr(Path, "chmod", lambda self, mode: None)
+
+    tm = TokenManager(_cfg(), cache_path=tmp_path / "tok.json")
+    with mock.patch.object(tm, "_request_new", return_value=("tok", 3600)):
+        tm.get_token()
+    assert oct(tm.cache_path.stat().st_mode)[-3:] == "600"
+
+
+def test_token_cache_tightens_preexisting_loose_file(tmp_path):
+    """이미 0644로 남아 있던 캐시도 조인다 — O_CREAT의 mode는 신규 생성에만 적용된다."""
+    tm = TokenManager(_cfg(), cache_path=tmp_path / "tok.json")
+    tm.cache_path.write_text("{}")
+    tm.cache_path.chmod(0o644)
+    with mock.patch.object(tm, "_request_new", return_value=("tok", 3600)):
+        tm.get_token()
+    assert oct(tm.cache_path.stat().st_mode)[-3:] == "600"
+
 
 def test_token_cache_reuse_and_expiry(tmp_path):
     tm = TokenManager(_cfg(), cache_path=tmp_path / "tok.json")
