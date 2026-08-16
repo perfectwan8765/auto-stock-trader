@@ -179,9 +179,14 @@ K=15~20 유지.
 > 스모크를 밤에 돌리게 되는데, 그때 환전하면 우대가를 못 받는다. **환전은 낮에 미리, 발주는 밤에.**
 
 응답 스키마(`result.items[]`·`lastPrice`·`cashBuyingPower`·`today.regularMarket` 등)는
-[tests/test_broker.py](tests/test_broker.py)에 실측 픽스처로 고정돼 있다 — 스펙 변경 시 테스트가 깨져 알려준다.
+[tests/test_broker.py](../../tests/test_broker.py)에 실측 픽스처로 고정돼 있다 — 스펙 변경 시 테스트가 깨져 알려준다.
 
-**아직 브로커 래퍼가 없는 엔드포인트의 실측 스키마** (구현 시 이 구조를 전제로 짤 것):
+**Phase 0에서 관찰한 엔드포인트 스키마.** 아래 중 `POST /orders`·`GET /orders/{id}`·`/stocks`·
+`/market-calendar`는 이미 래퍼가 있다([broker.py](../../src/toss/broker.py) `place`·`get_order`·
+`get_fill`·`get_stock_info`·`is_market_open`).
+⚠️ **`execution.settlementDate`만은 실응답으로 확인된 적이 없다** — 이 블록의 다른 필드와 달리
+근거가 여기뿐이다. 필드명이 틀리면 주문로그에 `settlement_date: null`이 조용히 쌓인다.
+Phase 6 스모크의 관찰 항목이다([execution-review-fixes.md](execution-review-fixes.md)).
 
 ```
 POST /api/v1/orders           → result: {orderId, clientOrderId}
@@ -198,7 +203,9 @@ GET  /api/v1/market-calendar/US → result.today: {regularMarket, preMarket, aft
 ```
 
 - `execution.filledQuantity`는 **체결수량 기반 관리셋 M 갱신**의 입력이다. 현재 러너는 발주 의도 기준으로만
-  M을 갱신한다([managed.py](../../src/execution/managed.py) 한계 주석) — 정밀화하려면 위 GET 래퍼부터 추가해야 한다.
+  M을 갱신한다([managed.py](../../src/execution/managed.py) 한계 주석). 래퍼(`get_fill`)는 이미 있으므로
+  남은 일은 **체결수량을 M 갱신에 배선하는 것**이다. 2026-08-16 조치로 발주 시점 부분매도
+  (sellable 클램프)는 `exit_partial`로 갈랐지만, 체결 시점 부분체결은 여전히 미해결이다.
 - `market` / `status` + `delistDate` / `listDate`는 OTC 배제·생존편향 교차검증·PIT 편입일 판정에 쓴다.
 - market-calendar 시각 예: 정규장 `22:30~익일 05:00 KST`(=09:30~16:00 ET), preMarket `17:00~22:30`, afterMarket `05:00~08:50`.
 
@@ -300,6 +307,10 @@ qlib.init(provider_uri=<절대경로>, region=REG_US, kernels=1)   # ← 회피�
 - Rate limit 준수(호출 간 sleep), 에러코드별 처리(잔액부족·장마감·rate-limit)
 - **[개선10] 라이브러리 예외화 ✅(2026-07-18 완료):** `src/toss/`는 설정/계좌/토큰 오류를 `SystemExit` 대신 `TossError` 계열(`TossConfigError`·`TossAuthError`·`TossApiError`, `errors.py`)로 던진다. `SystemExit` 종료 변환은 CLI(`_bootstrap.cli`)에서만 → cron 자동화가 서킷브레이커·kill switch·부분 이월로 잡을 수 있음.
 - **[개선11] invalid-token 재시도 ✅(2026-07-20 구현, mock 검증):** `TossClient.request()`가 401 응답 시 `get_token(force_refresh=True)` 후 **1회만** 재시도(`_retry` 플래그로 상한). 401은 미처리 거부라 POST /orders 재시도도 안전(clientOrderId 멱등키 이중안전망). mock 테스트 3(재시도·상한·비401 무재시도). **실 401 동작 확인만 Phase 0(키 승인 후).**
+  · ⚠️ **2026-08-16 코드리뷰에서 결함 1건 발견·조치** — 재시도가 `get_token(force_refresh=True)`
+  반환값을 버리고 캐시를 다시 읽었다. `_write_cache`는 `expires_in > 0`일 때만 쓰므로 응답에
+  `expires_in`이 없거나 0이면 **거부된 옛 토큰을 재전송**해 401 복구가 영구 불능이 됐다.
+  재발급 토큰을 직접 넘기도록 고쳤다. 조치·근거는 [execution-review-fixes.md](execution-review-fixes.md).
 - **[개선13] OAuth 응답바디 로깅 누설 ✅(2026-07-18 완료):** 토큰 발급 실패 시 `resp.text`(전체 본문) 대신 표준 OAuth `error`/`error_description`만 노출(비-JSON이면 status만). `auth.py:_oauth_error_detail`. (code-review 2026-07-17 발견)
 - **에지케이스:** 정규장 외 호출·부분체결·잔액부족·네트워크 재시도·환전 미완·크래시 중 부분 리밸런싱
 - **검증:** 각 함수 단위 테스트 (mock 응답) — dry-run 발주계획·멱등키 재현·최소금액 스킵·자금부족 이월 케이스 포함
@@ -375,8 +386,16 @@ $700 계좌에서 **포트폴리오의 0.14% 드리프트에도 주문이 나갔
   `cost.commission`은 조회 시점의 누적 상태라 저장하지 않으면 되살릴 수 없다
 - ✅ **E10 서킷브레이커 파일영속** — 인메모리만 쓰면 상한에 걸려 멈춘 뒤 재기동하는 것만으로
   카운터가 0이 되어 **재시작이 안전판을 우회**했다. 주문·손실을 기록할 때마다 즉시 저장하고,
-  "일일" 경계는 호출자가 주는 리밸 일자로 판정한다(시간대 해석에 의존하지 않는다).
   상태 파일이 손상돼도 발주를 막지는 않되 카운터는 0에서 다시 센다
+  · ⚠️ **2026-08-16 코드리뷰에서 결함 3건 발견·조치** — 영속은 됐지만 상한이 실제로 걸리지
+  않았다. ① "일일" 경계가 **시그널 날짜**여서 시그널을 다시 만드는 것만으로 같은 날 카운터가
+  리셋됐다(재기동 우회를 막으려던 영속에 다른 우회로가 있었다) → 미국 거래일로 변경.
+  ② 손실 축이 청산 직후 리셋됐다(손실 종목을 팔면 `holdings`에서 사라져 0이 대입됨) → 워터마크.
+  ③ 손실 상한이 매도까지 막아 **손실이 큰 날 청산이 불가능**했다 → 손실 축은 매수에만.
+  더불어 `--max-loss` 기본값이 `--budget` 기본값과 같은 700이라 사실상 무발동이었다 → 70(10%).
+  ⚠️ **여전히 미실현 손익만 본다** — `record_loss`는 프로덕션 호출자가 없고, 실현손익을
+  계산하려면 `cost`(holdings 전용)를 스냅샷·영속하는 단계가 선행돼야 한다.
+  상세는 [execution-review-fixes.md](execution-review-fixes.md)
 - ⏳ **비용 캘리브레이터** — **의도적으로 미구현.** 입력 로그가 0건이라 지금 만들면
   실데이터를 못 본 채 스키마를 추측하게 된다. 첫 실주문 뒤에 만든다
 
