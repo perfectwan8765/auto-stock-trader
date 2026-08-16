@@ -118,7 +118,12 @@ def main() -> None:
     ap.add_argument("--state", default=str(LOG_DIR / "managed_state.json"), help="화이트리스트 상태 파일")
     ap.add_argument("--kill-switch", default=str(ROOT / "KILL"), help="이 파일 존재 시 발주 중단")
     ap.add_argument("--max-orders", type=_positive_int, default=60, help="일일 주문건수 상한(서킷브레이커)")
-    ap.add_argument("--max-loss", type=_positive_float, default=700.0, help="일일 손실 상한(USD, 손익 배선은 Phase 0)")
+    # 종전 기본값 700은 --budget 기본값과 같아, 포트폴리오 전액이 하루에 사라져야 트립했다
+    # = 사실상 무발동. 예산의 10%로 내린다. 두 기본값의 연동은 코드에 없으니 예산을 바꾸면
+    # 이 값도 함께 봐야 한다.
+    ap.add_argument("--max-loss", type=_positive_float, default=70.0,
+                    help="일일 손실 상한(USD). 기본값은 --budget 기본값 700의 10%%. "
+                         "예산을 바꾸면 함께 조정할 것. 실현손실은 아직 반영되지 않는다(미실현만)")
     ap.add_argument("--circuit-state", default=str(LOG_DIR / "circuit_breaker.json"),
                     help="서킷브레이커 상태 파일(E10) — 재기동이 상한을 우회하지 못하게 한다")
     ap.add_argument("--max-age-days", type=_positive_int, default=5,
@@ -154,9 +159,12 @@ def main() -> None:
     print(f"시그널: {sig_path.relative_to(ROOT)} (date={sig['date']}, topk={sig['topk']})")
     print(f"모드: {mode} · 예산 ${args.budget} · min ${args.min_order}"
           f" · no-trade 밴드 {policy.rebalance_band:.0%}")
-    if cb.orders_today or cb.realized_loss_usd:
+    # 이월 손실은 guard()가 쓰는 값과 같아야 한다. realized_loss_usd만 보면 프로덕션에서
+    # 항상 0이라 실제로 이월된 손실이 $0으로 표시된다 — 운영자가 그걸 보고 판단한다.
+    carried_loss = cb.daily_loss_usd + cb.realized_loss_usd
+    if cb.orders_today or carried_loss:
         print(f"서킷브레이커 이월: 주문 {cb.orders_today}/{args.max_orders}"
-              f" · 손실 ${cb.realized_loss_usd:.2f}/${args.max_loss:.2f} (같은 날 재실행)")
+              f" · 손실 ${carried_loss:.2f}/${args.max_loss:.2f} (같은 미국 거래일 재실행)")
 
     # 시그널 신선도 가드: 오래된 시그널로 발주 방지(주간 cron에서 파이프라인 실패 시 지난
     # 시그널 재사용 차단). 실발주는 거부, dry-run은 경고만(계획 검토 허용).

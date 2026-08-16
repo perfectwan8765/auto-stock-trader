@@ -117,6 +117,22 @@ def test_confirm_places_orders(wired, monkeypatch):
     assert len(broker.placed) == 2
 
 
+def test_max_loss_default_is_reachable(wired, monkeypatch):
+    """★ 손실 상한 기본값이 예산 기본값과 같으면 트립할 수 없다.
+
+    종전 기본값은 --budget 기본값과 똑같은 700이었다. $700 예산에서 하루 $700을 잃으려면
+    포트폴리오 전액이 사라져야 하므로 이 축은 사실상 무발동이었다. 배선을 고쳐도 임계값이
+    도달 불가면 아무것도 안 바뀐다.
+    """
+    _, cb_kwargs, argv = wired
+    argv()                                    # --max-loss 미지정 → 기본값
+    monkeypatch.setattr(live, "_signal_age_days", lambda *a: 0)
+    live.main()
+
+    assert cb_kwargs["max_loss_usd"] == 70.0
+    assert cb_kwargs["max_loss_usd"] < 700.0  # 예산 기본값으로 회귀하면 잡는다
+
+
 def _clock_fixed_at(moment):
     """`live.datetime` 대역. now()만 고정하고 나머지는 진짜 datetime에 위임한다."""
 
