@@ -1,18 +1,7 @@
-"""단계 3 입력 패널 구성 — 판정 모집단 · 가격 · 팩터.
+"""단계 3 입력 패널 — 판정 모집단·가격·팩터. 모집단 정의는 사전등록 §9 A-2.
 
-사전등록 §9 A-2가 확정한 정의를 코드로 옮긴 것이다. 이벤트스터디 본체(`run_event_study.py`)가
-이 모듈을 통해서만 데이터를 받으므로, 모집단 정의가 한 곳에만 존재한다.
-
-판정 모집단
-    필터 통과 ∩ PIT 시총 <$300M ∩ ADDV >= $200k
-    ∩ Toss 취급 ∩ (status == ACTIVE  OR  filing_date < delistDate)
-  관측 = 가격 있는 것 · 결측 = 가격 없는 것(전량 계상, h 경계로 처리)
-
-가격
-    data/normalized_small/*.csv — `data/qlib_us_small` 번들의 **입력 파일**이다
-    (03_dump_bin.py가 이 디렉터리를 읽어 .bin을 만든다). 같은 데이터이며 여기서는
-    qlib provider를 거치지 않고 직접 읽는다.
-    OHLC는 `factor = adjclose/close`가 곱해져 있어 **배당·분할 조정**된 값이다(02_normalize.py).
+가격은 `data/normalized_small/*.csv`를 직접 읽는다. `data/qlib_us_small` 번들의 입력 파일이라
+같은 데이터이며(03_dump_bin.py), OHLC에 `factor = adjclose/close`가 곱해져 배당·분할 조정돼 있다.
 """
 from __future__ import annotations
 
@@ -41,7 +30,7 @@ def read_symbols(path: Path) -> set[str]:
 
 
 def judged_population() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """(관측 이벤트, 결측 이벤트) — 사전등록 §9 A-2 (1)의 모집단 정의."""
+    """(관측 이벤트, 결측 이벤트). 사전등록 §9 A-2(1)."""
     obs = pd.read_csv(SPREAD, parse_dates=["filing_date"])
     obs = obs[(obs.mcap_usd < MCAP_MAX) & (obs.addv >= ADDV_MIN)].copy()
 
@@ -59,11 +48,8 @@ def judged_population() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def load_prices() -> dict[str, pd.DataFrame]:
-    """종목별 OHLC (배당·분할 조정).
-
-    ⚠️ 거래정지일(02_normalize가 전 컬럼 NaN으로 둔 행)은 **여기서 제거**된다. 따라서
-    인덱스는 실제 거래일만의 압축 목록이고, "H거래일 보유"가 달력일로는 더 길 수 있다.
-    실측: 진입~청산 달력일 p50 43일 · p99 48일 · 50일 초과 2건(0.1%)이라 영향은 무시할 수준이다.
+    """종목별 OHLC. 거래정지일이 제거되므로 인덱스는 실제 거래일만의 압축 목록이다 —
+    "H거래일 보유"가 달력일로는 더 길어질 수 있다(실측 p99 48일 vs 정상 43일).
     """
     out = {}
     for f in NORM.glob("*.csv"):
@@ -85,7 +71,7 @@ def load_factors() -> pd.DataFrame:
 
 
 def load_sic() -> pd.Series:
-    """CIK → SIC 2자리 (섹터 통제용. 현재 값이라 PIT 아님 — §9 A-2 (3))."""
+    """CIK → SIC 2자리. 현재 값이라 PIT 아니다(§9 A-2(3))."""
     s = pd.read_csv(SIC)
     s["sic2"] = s.sic.astype(str).str.zfill(4).str[:2]
     return s.set_index("cik").sic2

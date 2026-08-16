@@ -1,12 +1,8 @@
 """벤치마크 ETF + Ken French 팩터 수집 — 계획서 §5 단계 1(i), E8.
 
-이게 없으면 D9(FF3/5+MOM·rf 차감)와 D15(IWC 추가 팩터)의 조정 자체를 못 한다.
-마이크로캡을 SPY에만 회귀하면 size premium이 통째로 alpha로 잡힌다.
+마이크로캡을 SPY에만 회귀하면 size premium이 통째로 alpha로 잡힌다(D9·D15).
 
-산출:
-  data/benchmarks.csv  — IWM·IWC·IJS·SPY 일별 adjclose
-  data/ff_factors.csv  — Mkt-RF·SMB·HML·RMW·CMA·RF·MOM (일별, 소수 단위)
-
+산출: data/benchmarks.csv (IWM·IWC·IJS·SPY) · data/ff_factors.csv (FF5 + MOM, 일별 소수)
 실행:  .venv/bin/python scripts/data_pipeline/fetch_benchmarks.py
 """
 from __future__ import annotations

@@ -1,14 +1,9 @@
-"""30거래일 수익률 σ와 1층 검정력(t) 재계산 — 계획서 §3.13(2)(3).
+"""30거래일 수익률 σ와 1층 검정력 재계산 — 계획서 §3.13(2)(3).
 
-왜 스크립트로 두나: t는 이상치 처리 규칙 하나로 1.77↔8.45까지 움직이고(첨도 4,131),
-n에 √로 달려 있어 `measure_*` 산출물이 바뀔 때마다 다시 내야 한다. v3.3에서 이 계산이
-임시 스크립트로 이뤄져 유실됐다(E5 위반).
+    n_eff = n_events × coverage      SE = σ / √n_eff      t = CAR_true / (SE × inflation)
 
-    n_eff = n_events × coverage
-    SE    = σ / √n_eff
-    t     = CAR_true / (SE × inflation)      # inflation = 이벤트 군집 교차상관 SE 팽창
-
-구조 통계·분산만 만든다 — 이벤트 조건부 수익률은 계산하지 않는다(계획서 §9 서두).
+이상치 규칙 하나로 t가 4배 넘게 움직이고 n에 √로 달려 있어, `measure_*` 산출물이 바뀔 때마다
+다시 내야 한다. 구조 통계만 만든다 — 이벤트 조건부 수익률은 계산하지 않는다.
 
 실행:  .venv/bin/python scripts/data_pipeline/measure_power.py
 """
@@ -29,7 +24,7 @@ WINSOR = (0.0, 0.01, 0.025, 0.05)
 
 
 def sigma_by_rule(closes: pd.DataFrame, symbols: set[str]) -> tuple[dict[float, float], int, dict]:
-    """유니버스 종목의 무조건부 30거래일 수익률에서 winsor 수준별 σ를 낸다."""
+    """winsor 수준별 σ, 관측 수, 분포 요약."""
     px = closes[[c for c in closes.columns if c in symbols]]
     ret = (px.shift(-HORIZON) / px - 1.0).values.ravel()
     ret = ret[np.isfinite(ret)]

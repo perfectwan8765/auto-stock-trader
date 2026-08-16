@@ -1,16 +1,8 @@
-"""단계 3 — 이벤트스터디 [1층 게이트]. 계획서 §5 단계 3, 사전등록 §5·§9 A-2.
+"""단계 3 — 이벤트스터디 [1층 게이트]. 판정 지점이다.
 
-**이것이 프로젝트의 판정 지점이다.** 실현 가능 BHAR의 비관 경계가 임계에 미달하면 종료한다.
-
-측정 정의 (전부 사전등록에 박혀 있다 — 여기서 바꾸면 위반이다)
-    진입    t+1 시가 (판정) · t=0 종가와 t+1 종가는 참고
-    청산    진입일로부터 H거래일 뒤 종가
-    수익    BHAR = (청산가/진입가 − 1) − (팩터모형 기대 보유수익)
-    기대    추정창 t−250~t−31(최소 100관측)에서 FF5+MOM+IWC로 베타 추정 → 이벤트창에 적용
-    비용    수수료 0.10% × 2 + `spread_final` × 2 (시장가 강제, 왕복)
-    이상치  이벤트별 BHAR 횡단면 winsorize 1% 양측 (판정). raw 병기
-    판정 t  교차상관 보정 (BMP 표준화 + Kolari-Pynnönen 팽창)
-    경계    E[결측] = 0.031×(−55%) + 0.969×(관측 BHAR × h), 판정 h=0
+측정 정의는 전부 사전등록 §5·§9 A-2에 박혀 있다 — 여기서 바꾸면 위반이다.
+진입 t+1 시가 · 청산 H거래일 뒤 종가 · BHAR = 실현 − 팩터모형 기대 · 추정창 t−250~t−31 ·
+비용 왕복(수수료 0.10%×2 + spread_final×2) · winsor 1% 횡단면 · 교차상관 보정 t · 판정 h=0.
 
 실행:  .venv/bin/python scripts/event_study/run_event_study.py
 옵션:  --horizons 30 60 90   --no-cost(비용 전 값 확인용, 판정 아님)
@@ -40,7 +32,7 @@ WINSOR = 0.01
 
 
 def _estimate(px: pd.DataFrame, fac: pd.DataFrame, entry_idx: int) -> tuple[np.ndarray, float] | None:
-    """추정창에서 팩터 베타와 잔차 일별 표준편차를 낸다."""
+    """(팩터 베타, 잔차 일별 표준편차)."""
     lo, hi = entry_idx - EST_START, entry_idx - EST_END
     if lo < 0:
         return None
@@ -58,7 +50,7 @@ def _estimate(px: pd.DataFrame, fac: pd.DataFrame, entry_idx: int) -> tuple[np.n
 
 def _bhar(px: pd.DataFrame, fac: pd.DataFrame, entry_idx: int, H: int,
           beta: np.ndarray, entry_price: float) -> tuple[float, float] | None:
-    """(실현 보유수익, 기대 보유수익). 청산은 진입일로부터 H거래일 뒤 종가."""
+    """(실현 보유수익, 기대 보유수익)."""
     exit_idx = entry_idx + H
     if exit_idx >= len(px):
         return None
@@ -129,9 +121,8 @@ def _winsor(x: pd.Series, q: float = WINSOR) -> pd.Series:
 def cross_correlation_inflation(df: pd.DataFrame, H: int) -> tuple[float, float, float]:
     """Kolari-Pynnönen 팽창 계수 √(1+(n̄−1)ρ̄).
 
-    ρ̄는 이벤트 종목 잔차의 평균 쌍상관을 표본으로 근사하고, n̄은 **보유기간이 겹치는
-    이벤트 수**(=동시 포지션 수)의 중앙값을 쓴다. 같은 날짜 이벤트만 세면 겹치는 창을
-    무시하게 되는데, H=30에서 동시 포지션 중앙값이 수백이라 그쪽이 실제 문제다.
+    n̄은 같은 날짜가 아니라 **보유기간이 겹치는 이벤트 수**다 — H=30의 동시 포지션이
+    수백이라 겹치는 창을 무시하면 팽창을 과소평가한다.
     """
     ends = df.entry_date + pd.Timedelta(days=int(H * 1.45))     # 거래일 H ≈ 달력일 1.45H
     overlap = [(((df.entry_date <= e) & (ends >= s)).sum()) for s, e in zip(df.entry_date, ends)]
@@ -163,10 +154,8 @@ def estimate_rho(df: pd.DataFrame, prices: dict, fac: pd.DataFrame, max_sym: int
 
 
 def judge(df: pd.DataFrame, n_missing: int, H: int, label: str) -> dict:
-    """판정 통계 — winsor 1% · 섹터 통제 SE · 교차상관 보정 t · 결측 경계.
-
-    n_missing에는 **계산 실패분도 포함**해야 한다 — 가격 이력이 짧거나 추정창이 모자란
-    이벤트는 조기 상장·조기 소멸 쪽에 몰려 있어(비무작위) 빼면 경계가 낙관으로 기운다.
+    """판정 통계. n_missing에는 계산 실패분도 포함한다 — 짧은 이력·조기 소멸 쪽에 몰린
+    비무작위 표본이라 빼면 경계가 낙관으로 기운다(정정 A-3).
     """
     x_raw = df.bhar
     x = _winsor(x_raw)
@@ -203,7 +192,7 @@ def judge(df: pd.DataFrame, n_missing: int, H: int, label: str) -> dict:
 
 
 def threshold(H: int, spread: float, target_net: float = 0.10) -> float:
-    """§5.2 역산 — 목표 net에서 필요한 총 BHAR(비용 전)."""
+    """§5.2 역산 — 목표 net에서 필요한 총 BHAR."""
     return target_net * H / 252 + 2 * (COMMISSION + spread)
 
 

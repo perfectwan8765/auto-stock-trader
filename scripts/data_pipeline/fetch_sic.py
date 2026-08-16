@@ -1,14 +1,7 @@
-"""발행사 SIC 코드 수집 — 계획서 §5 단계 2 "SIC 추출", D9 섹터 통제용.
+"""발행사 SIC 수집 — 계획서 §5 단계 2, D9 섹터 통제용. 산출: data/issuer_sic.csv
 
-GICS는 유료·현재시점이지만 EDGAR SIC는 무료다. 마이크로캡은 바이오텍·광업 편중이 심하고
-내부자 매수 패턴이 섹터마다 완전히 달라, 섹터를 통제하지 않으면 섹터 틸트를 알파로 읽는다
-(대형주에서 겪은 "beta 틸트를 알파로 착각"의 같은 구조).
-
-산출: data/issuer_sic.csv (cik, sic, sic_description, entity_name)
-
-⚠️ **PIT 한계.** EDGAR submissions API가 주는 SIC는 **현재 값**이다. 공시 시점 SIC는 각 파일링의
-SGML 헤더에 있으나 그건 accession 단위라 요청이 수만 건이 된다. 마이크로캡의 SIC 변경은
-드물지만 0은 아니므로, **이 열을 PIT로 취급하지 말 것** — 섹터 통제용 근사다.
+⚠️ **PIT 아니다.** EDGAR submissions API는 현재 SIC를 준다. 공시 시점 값은 각 파일링의 SGML
+헤더에 있으나 accession 단위라 요청이 수만 건이 된다. 섹터 통제용 근사로만 쓸 것.
 
 실행:  .venv/bin/python scripts/data_pipeline/fetch_sic.py
 옵션:  --events data/insider_events.csv (기본) — 이 파일의 CIK만 조회

@@ -1,12 +1,9 @@
-"""단계 2 검증 4종 — 계획서 §5 단계 2 "검증"(E9).
+"""단계 2 검증 — 계획서 §5 단계 2(E9). 조인이 조용히 어긋나면 이후 전 결과가 무효다.
 
-조인이 조용히 어긋나면 이후 전 결과가 무효가 되므로, 수집이 끝난 직후 기계적으로 확인한다.
-
-  (1) 이벤트를 (발행사, FILING_DATE)로 접었을 때 거래행 대비 비율이 약 2.6배인가
-      — 접기가 동작하지 않으면 이벤트 수가 통째로 과대 계상된다
-  (2) FILING_DATE < TRANS_DATE 인 행이 0건인가 — 미래 누수 검출
-  (3) 알려진 사례 5건 스팟체크 — 이벤트가 가격 패널·시총 산정과 손으로 맞춘 값에 맞는가
-  (4) AFF10B5ONE 컬럼이 없는 과거 분기에서 KeyError 없이 통과하는가
+  (1) (발행사, FILING_DATE)로 접었을 때 거래행 대비 비율이 약 2.6배인가
+  (2) 우리 이벤트 집합에 음수 공시지연이 0건인가 — 원자료 오기가 걸러졌는가
+  (3) 스팟체크 — 직전 종가 간격·지연 범위·청산가 존재
+  (4) AFF10B5ONE 부재 분기에서 필터가 실제로 꺼지는가
 
 실행:  .venv/bin/python scripts/data_pipeline/verify_stage2.py
 옵션:  --events data/insider_events_full.csv
@@ -41,7 +38,7 @@ def _parse(v: str):
 
 
 def check_fold_and_leak(quarters: list[str]) -> tuple[bool, int]:
-    """(1) 접기 비율과 (2) 미래 누수를 DERA 원본에서 직접 센다."""
+    """(1) 접기 비율, (2) 원자료 미래 누수 건수."""
     trans_rows = leak = 0
     pairs: set[tuple[str, str]] = set()
     for q in quarters:
@@ -71,7 +68,7 @@ def check_fold_and_leak(quarters: list[str]) -> tuple[bool, int]:
 
 
 def check_events_leak(events: Path) -> bool:
-    """(2) 산출된 이벤트 집합에 음수 공시지연이 남아 있는가 — 0건이어야 한다."""
+    """(2) 산출된 이벤트 집합의 음수 공시지연 — 0건이어야 한다."""
     with open(events, newline="", encoding="utf-8") as f:
         lags = [int(r["filing_lag_days"]) for r in csv.DictReader(f)]
     neg = sum(1 for x in lags if x < 0)
@@ -81,7 +78,7 @@ def check_events_leak(events: Path) -> bool:
 
 
 def check_10b5_column(quarters: list[str]) -> bool:
-    """(4) AFF10B5ONE 부재 분기에서 .get() 접근이 KeyError를 내지 않는가."""
+    """(4) AFF10B5ONE 부재 분기에서 필터가 실제로 꺼지는가."""
     absent = []
     for q in quarters:
         with open(DERA / q / "SUBMISSION.tsv", encoding="utf-8", errors="replace") as f:
@@ -103,7 +100,7 @@ def check_10b5_column(quarters: list[str]) -> bool:
 
 
 def spot_check(events: Path, n: int = 5) -> bool:
-    """(3) 이벤트 5건이 가격 패널과 맞물리는지 손으로 확인 가능한 형태로 출력."""
+    """(3) 이벤트 5건 스팟체크."""
     with open(events, newline="", encoding="utf-8") as f:
         rows = [r for r in csv.DictReader(f) if r["symbol"]]
     if not PRICES.exists():
