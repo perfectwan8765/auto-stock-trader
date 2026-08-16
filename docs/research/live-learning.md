@@ -16,9 +16,9 @@
    이 식을 그대로 풀면 **연 SR=0.5를 0과 구분하는 데 t=2 기준 약 16년, 검정력 80% 기준 약 32년이 필요하다.**
 2. ★ **표본 주기를 월→주→일로 올려도 필요 연수가 거의 줄지 않는다.** 16.2년(월) → 16.0년(주) → 16.0년(일).
    "데이터를 자주 찍으면 빨리 안다"는 직관은 Sharpe 판별에 관한 한 틀렸다.
-3. 개인투자자가 매매로 학습하기는 한다. 다만 **생존편의를 제거하면 100거래당 연 30bp**이고,
+3. 개인투자자가 매매로 학습하기는 한다. 다만 **생존편의를 제거하면 100거래당 연 30bp**이고
    보정 전 추정치는 이보다 **2~4배 부풀려져 있다** (Seru, Shumway & Stoffman 2010).
-   그리고 학습의 상당 부분은 "실력 없는 사람이 그만두는 것"이지 "실력이 느는 것"이 아니다.
+   학습의 상당 부분은 "실력 없는 사람이 그만두는 것"이지 "실력이 느는 것"이 아니다.
 4. 대만 데이 트레이더 전수 데이터에서 **지속적으로 수익을 내는 사람은 하루 평균 활동 트레이더의 3% 미만**,
    선행 연구 기준으로는 **1% 미만**이다. 75%가 2년 안에 그만둔다 (Barber, Lee, Liu, Odean & Zhang).
 5. 백테스트에서 독립 설정을 **N=45개만 시도해도 5년치 데이터는 소진된다** — 진짜 실력이 0인데도
@@ -87,7 +87,7 @@ IID 수익률 가정에서 점근분산은 (Equation 8):
 
 > **n_years = z² / SR_a² + z² / (2m)**
 
-두 번째 항은 무시할 만큼 작다. **즉 필요한 햇수는 사실상 `z²/SR_a²`이고, 관측 주기와 거의 무관하다.**
+두 번째 항은 무시할 만큼 작다. **필요한 햇수는 사실상 `z²/SR_a²`이고 관측 주기와 거의 무관하다.**
 
 **t = 2 기준 (양측 5%, 검정력 약 50%)**
 
@@ -105,7 +105,7 @@ IID 수익률 가정에서 점근분산은 (Equation 8):
 "고빈도로 관측해서 빨리 판별한다"는 발상은 이 프레임에서 작동하지 않는다.
 
 **t=2는 검정력 50%짜리 기준이라는 점이 중요하다.** t=2를 "참인 SR이 정확히 0.5일 때 기대되는 t값"으로
-잡았으므로, 실제로 유의성을 얻을 확률은 절반뿐이다. 80% 검정력을 원하면
+잡았으므로 실제로 유의성을 얻을 확률은 절반뿐이다. 80% 검정력을 원하면
 `z = 1.96 + 0.84 = 2.80`을 써야 하고 필요 표본은 약 1.96배가 된다:
 
 | 연율 SR | 80% 검정력 필요 연수 (월간) | (주간) |
@@ -139,7 +139,7 @@ Equation (13):
 | 월간, IID Normal | 3.24년 | +18.7% |
 | 월간, 헤지펀드 왜도·첨도 적용 | **4.99년** | **+82.8%** |
 
-★ 여기서도 주기 효과는 작고(2.73 → 3.24년), **비정규성 효과가 훨씬 크다**(3.24 → 4.99년).
+★ 여기서도 주기 효과는 작고(2.73 → 3.24년) **비정규성 효과가 훨씬 크다**(3.24 → 4.99년).
 
 논문이 스스로 붙인 경고:
 
@@ -178,16 +178,16 @@ Theorem 2:
   annualized Sharpe ratio IS of 1 but an expected Sharpe ratio OOS of zero."*
 - *"After trying only **seven** independent strategy configurations, the expected maximum SR IS is 1
   for a **two-year** long backtest, while the expected SR OOS is 0."*
-- 모형 복잡도와의 연결: 이진 파라미터 5개면 `N = 2⁵ = 32`. 파라미터 몇 개만 늘려도 예산이 소진된다.
+- 모형 복잡도와 이어 보면: 이진 파라미터 5개면 `N = 2⁵ = 32`. 파라미터 몇 개만 늘려도 예산이 소진된다.
 
 논문의 자기 한계 진술:
 
 > *"a backtest may be overfit even if it is computed on a sample greater than MinBTL.
 > From that perspective, MinBTL should be considered a necessary, nonsufficient condition."*
 
-★ **실계좌 운용에 주는 함의**: 실계좌는 N=1이므로 MinTRL 영역이고, 위 §1.2 표가 그대로 적용된다.
+★ **실계좌 운용에 주는 함의**: 실계좌는 N=1이므로 MinTRL 영역이고 위 §1.2 표가 그대로 적용된다.
 반면 백테스트로 설정을 고르는 단계는 MinBTL 영역이라 훨씬 가혹하다.
-**두 예산은 별개로 소비되며, 백테스트에서 N번 시도한 뒤 실계좌를 켜도 실계좌의 MinTRL은 줄어들지 않는다.**
+**두 예산은 별개로 소비되며 백테스트에서 N번 시도한 뒤 실계좌를 켜도 실계좌의 MinTRL은 줄어들지 않는다.**
 
 ### 1.4 개인투자자는 실제로 매매에서 배우는가
 
@@ -232,7 +232,7 @@ Theorem 2:
 - 결론: *"the primary way that low-ability investors learn is by learning to stop trading."*
 
 ★ **읽는 법**: 100거래당 연 30bp라는 숫자를 §1.2 표와 나란히 놓아야 한다.
-연 30bp 개선은 SR로 환산하면 극히 작고, 그 개선이 실재하는지 확인하는 데 필요한 표본은
+연 30bp 개선은 SR로 환산하면 극히 작고 그 개선이 실재하는지 확인하는 데 필요한 표본은
 개선 자체보다 훨씬 크다. **피드백 루프가 열려 있긴 하지만 대역폭이 사실상 0에 가깝다.**
 
 #### 데이 트레이더 생존 — Barber, Lee, Liu, Odean & Zhang
@@ -265,15 +265,15 @@ https://faculty.haas.berkeley.edu/odean/papers/Day%20Traders/Day%20Trading%20and
 
 > *"a small subset of day traders (**less than 1% of the day trading population**) predictably earn profits."*
 
-★ 다만 **학습의 증거도 있다**는 점은 공정하게 적어야 한다:
+★ 다만 **학습의 증거도 있다**는 점은 공정하게 적어 둔다:
 
 > *"profitable traders with more than **40 days** of day trading experience in the last year earn more
 > than enough to cover their transaction costs. These results confirm that an extensive history of
 > profitability is a strong predictor of future profitable. **However, very few traders are predictably
 > profitable.**"*
 
-즉 "과거 수익성 + 충분한 경험"은 미래 수익성의 강한 예측변수다.
-문제는 그 조건을 만족하는 사람이 3% 미만이라는 것이다.
+"과거 수익성 + 충분한 경험"은 미래 수익성의 강한 예측변수다.
+그 조건을 만족하는 사람이 3% 미만이라는 게 문제다.
 
 #### 매매 자체의 비용 — Barber & Odean
 
@@ -293,7 +293,7 @@ https://faculty.haas.berkeley.edu/odean/papers%20current%20versions/Individual_I
 > households that trade frequently earn a **net** annualized geometric mean return of **11.4 percent**,
 > and those that trade infrequently earn **18.5 percent**."*
 
-즉 회전율이 만든 **7.1%p 격차는 전적으로 거래비용**이다. 종목선택 능력 차이가 아니다.
+회전율이 만든 **7.1%p 격차는 전적으로 거래비용**이다. 종목선택 능력 차이가 아니다.
 
 거래비용 수준 (1990년대 할인증권사 기준):
 
@@ -327,24 +327,24 @@ PDF: https://faculty.haas.berkeley.edu/odean/papers%20current%20versions/justhow
 > *"trading losses (**27%**), commissions (**32%**), transaction taxes (**34%**), and market-timing
 > losses (**7%**)."*
 
-기관과의 대비: *"institutions enjoy an annual performance boost of **1.5 percentage points**."*
+기관과 비교하면: *"institutions enjoy an annual performance boost of **1.5 percentage points**."*
 
 ---
 
 ## 2. 노이즈가 학습을 어떻게 무력화하는가 — 종합
 
-이 항목에 대해 "finance에서의 outcome bias" 자체를 다룬 엄밀한 1차 논문은 찾지 못했다(§5 참조).
+이 항목에서는 "finance에서의 outcome bias" 자체를 다룬 엄밀한 1차 논문을 찾지 못했다(§5 참조).
 대신 위 출처들에서 직접 도출되는 정량적 진술을 정리한다.
 
 1. **신호 대 잡음비가 구조적으로 낮다.** SR=0.5 전략의 1년치 월간 데이터(T=12)에서
-   주기 SR은 0.144, SE는 sqrt((1+0.0104)/12) = 0.290. 즉 **t ≈ 0.5**. 1년 성과는 정보가 아니다.
+   주기 SR은 0.144, SE는 sqrt((1+0.0104)/12) = 0.290. 곧 **t ≈ 0.5**. 1년 성과는 정보가 아니다.
 2. **학습 신호가 잡음보다 훨씬 작다.** Seru et al.의 생존편의 보정 학습률은 100거래당 연 30bp인데,
    같은 기간 개인 포트폴리오의 연 변동성은 통상 15~25%다. 개선분을 검출하는 데 필요한 표본은
    전략 자체를 검출하는 데 필요한 표본보다 크다.
 3. **탈락이 관측을 오염시킨다.** Seru et al.: 생존편의를 무시하면 학습 추정치가 2~4배 부풀려진다.
-   자기 자신을 관측할 때는 이 편의를 제거할 표본 자체가 없다(N=1이고, 아직 살아 있다).
+   자기 자신을 관측할 때는 이 편의를 제거할 표본 자체가 없다(N=1이고 아직 살아 있다).
 4. **선택 편의는 백테스트 단계에서 이미 예산을 태운다.** N=10만 시도해도 실력 0에서 IS Sharpe 1.57이 나온다
-   (AMS 2014). 실계좌 성과가 좋아 보여도, 그 전략을 고른 과정이 N번의 탐색이었다면
+   (AMS 2014). 실계좌 성과가 좋아 보여도 그 전략을 고른 과정이 N번의 탐색이었다면
    실계좌 성과 자체가 그 탐색의 연장선일 수 있다.
 5. **추정오차는 평균에서 가장 치명적이다.** Chopra & Ziemba (1993)를 인용한 Ziemba & MacLean 챕터:
    > *"errors in the means average about **20 times** in importance in objective value than errors in
@@ -357,7 +357,7 @@ PDF: https://faculty.haas.berkeley.edu/odean/papers%20current%20versions/justhow
 
 ---
 
-## 3. 실계좌 학습에 대한 실무 함의 (내 추론 — 인용 아님)
+## 3. 실계좌 학습의 실무 함의 (내 추론 — 인용 아님)
 
 아래는 위 문헌에서 내가 끌어낸 함의이며 특정 논문의 주장이 아니다. 그렇게 표시해 둔다.
 
@@ -365,9 +365,9 @@ PDF: https://faculty.haas.berkeley.edu/odean/papers%20current%20versions/justhow
 - 반대로 **잘 배울 수 있는 양이 따로 있다**: 체결 슬리피지, 실제 수수료·세금, 대차 가능 여부와 비용,
   주문 미체결률, 시가/종가 갭. 이들은 **거래 단위로 직접 측정되고 복리로 누적되지 않아** 분산이 작다.
   Barber et al.(2009)이 손실의 66%를 수수료+거래세로 정확히 분해할 수 있었던 이유이기도 하다.
-- 따라서 실계좌의 합리적 목표는 "전략 검증"이 아니라 **"백테스트 가정과 현실의 차이 측정"** 쪽이다.
+- 실계좌의 합리적 목표는 "전략 검증"이 아니라 **"백테스트 가정과 현실의 차이 측정"** 쪽이다.
 - 판단 규칙을 사후에 바꾸지 않으려면 시작 전에 kill 조건을 못박아야 한다.
-  검정력이 없다는 사실 자체가, 사후 재량이 개입할 여지를 최대로 만들기 때문이다.
+  검정력이 없다는 사실 자체가 사후 재량이 개입할 여지를 최대로 만들기 때문이다.
 
 ---
 
@@ -423,8 +423,8 @@ Vanguard 자신의 결론:
 > we found that after-tax returns increased by **44 basis points** on an annualized basis without
 > increasing risk exposure."*
 
-★ **이 표에서 반드시 읽어야 할 것**: 리밸런싱을 **안 한** 포트폴리오가 세후 수익률 8.74%로 최고다.
-1,116회 리밸런싱한 쪽이 8.20%다. 즉 **리밸런싱은 92년에 걸쳐 연 54bp를 "지불"했고**,
+★ **이 표의 핵심**: 리밸런싱을 **안 한** 포트폴리오가 세후 수익률 8.74%로 최고다.
+1,116회 리밸런싱한 쪽이 8.20%다. **리밸런싱은 92년에 걸쳐 연 54bp를 "지불"했고**
 그 대가로 변동성 14.0% → 11.7%와 목표 배분 유지(85% → 60%)를 샀다.
 Sharpe는 0.46 → 0.50으로 올랐으니 위험조정 기준으로는 이득이다. **하지만 수익률 보너스는 아니다.**
 
@@ -456,7 +456,7 @@ André F. Perold & William F. Sharpe, "Dynamic Strategies for Asset Allocation,"
 | 리밸런싱이 위험조정 수익(Sharpe)을 높인다 | 지지됨, 다만 폭이 작다 (0.46 → 0.50~0.51) |
 
 "rebalancing bonus"라는 표현이 성립하는 조건은 **평균회귀적이고 추세 없는 변동장**이다.
-그건 자산 특성에 대한 가정이지 리밸런싱 규칙 자체의 성질이 아니다.
+그건 자산 특성을 두고 세운 가정이지 리밸런싱 규칙 자체의 성질이 아니다.
 그리고 Perold & Sharpe가 지적하듯 **모두가 constant-mix를 할 수는 없다** —
 누군가는 반대편을 받아 줘야 하므로 시장 총량 차원의 공짜 점심이 아니다.
 
@@ -475,7 +475,7 @@ AT&T 허가 하 재수록본 PDF: https://www.princeton.edu/~wbialek/rome/refs/k
 
 > *"G = lim_{N→∞} (1/N) log(V_N / V_0)"*
 
-★ 원전에는 "리스크 관리 기법"이라는 프레이밍이 없다. Kelly가 최대화하는 것은 **장기 성장률 하나**이며,
+★ 원전에는 "리스크 관리 기법"이라는 프레이밍이 없다. Kelly가 최대화하는 것은 **장기 성장률 하나**이며
 드로다운·단기 변동성·추정오차는 목적함수에 들어 있지 않다. 실무에서 Kelly를 줄여 쓰는 이유가 여기서 나온다.
 
 #### Thorp — 왜 full Kelly를 쓰지 않는가
@@ -515,7 +515,7 @@ f* 자체를 과대추정하기 쉽다는 경고:
 > {cf* : 0 ≤ c ≤ 1}."*
 > *"f* dominates the strategies for which c > 1 and they are not part of the efficient frontier."*
 
-★ 즉 **c > 1(과대베팅)은 효율적 프론티어 밖이고, 0 < c < 1은 전부 효율적**이다.
+★ **c > 1(과대베팅)은 효율적 프론티어 밖이고 0 < c < 1은 전부 효율적**이다.
 "얼마나 줄일지"는 통계가 아니라 선호의 문제라는 게 이론의 답이다.
 
 #### half-Kelly의 3/4 성장률 — 직접 유도
@@ -555,14 +555,14 @@ W. T. Ziemba & L. C. MacLean, "Using the Kelly Criterion for Investing," Ch. 1 o
 > *"In his lectures, Ziemba always says **when in doubt bet less** — that is certainly borne out in
 > these simulations."*
 
-Samuelson 비판에 대한 저자들의 수긍:
+저자들이 Samuelson 비판을 수긍하는 대목:
 
 > *"The Kelly strategy always leads to more wealth than any essentially different strategy;
 > **this we know from the simulation in this chapter is not true** since it is possible to have a large
 > number of very good investments and still lose most of one's fortune."*
 
-그리고 §2에서 인용한 Chopra & Ziemba의 **100:3:1** — log 투자자(=Kelly)는 평균 추정오차에
-가장 민감하다. §1.2의 "평균은 16년 걸려야 안다"와 겹쳐 읽으면, **실전에서 full Kelly를 쓸 만큼
+§2에서 인용한 Chopra & Ziemba의 **100:3:1** — log 투자자(=Kelly)는 평균 추정오차에
+가장 민감하다. §1.2의 "평균은 16년 걸려야 안다"와 겹쳐 읽으면 **실전에서 full Kelly를 쓸 만큼
 평균을 정확히 아는 상황은 사실상 없다**는 결론이 나온다.
 
 ### 4.4 회전율 비용의 실증 크기
@@ -648,7 +648,7 @@ NBER 원문 PDF: https://www.nber.org/system/files/working_papers/w8686/w8686.pd
 > **top 2 turnover deciles** are **5.38 and 5.05** respectively."*
 > (KS 검정 p < 0.01)
 
-즉 **많이 거래하는 사람일수록 더 집중되어 있다.** 두 실수(과회전 + 과집중)가 같이 온다.
+**많이 거래하는 사람일수록 더 집중되어 있다.** 두 실수(과회전 + 과집중)가 같이 온다.
 
 > *"investors in low income and non-professional categories hold the least diversified portfolios.
 > ... young, active investors are over-focused and hold under-diversified portfolios."*
@@ -658,18 +658,18 @@ NBER 원문 PDF: https://www.nber.org/system/files/working_papers/w8686/w8686.pd
 > *"With an average holding of **four common stocks**, we believe that risk-based rebalancing is not
 > a significant motivation for trading in the households that we study."*
 
-#### 소액 계좌에서의 긴장
+#### 소액 계좌에서 생기는 긴장
 
-문헌은 **두 방향의 압력을 각각 확인해 주지만, "계좌가 얼마 이하면 종목 수를 몇 개로"라는 형태의
-1차 가이드는 찾지 못했다** (§5). 확인된 것은 다음 두 사실이고, 이들이 서로 충돌한다.
+문헌은 **두 방향의 압력을 각각 확인해 주지만 "계좌가 얼마 이하면 종목 수를 몇 개로"라는 형태의
+1차 가이드는 찾지 못했다** (§5). 확인된 것은 다음 두 사실이고 이들이 서로 충돌한다.
 
 1. **분산 요구는 위쪽**: Statman 30~40종목 하한; 2종목 포트폴리오의 정규화 분산이 11–15종목의 약 2.5배.
 2. **고정비용 요구는 아래쪽**: Barber & Odean — *"individuals execute small trades and face
    **higher proportional commission costs** than mutual funds"*; $1,000 초과 거래도 왕복 4%가 들었다.
    계좌가 작을수록 종목 수를 늘리면 건당 주문금액이 고정비용 하한에 눌린다.
 
-DGU(§4.5)는 이 긴장에 대해 **가중치 최적화로 풀려 하지 말라**는 답을 준다 — 최적화의 이득이
-추정오차에 잡아먹히므로, 종목 수를 정한 뒤 1/N으로 두는 편이 낫다는 것이 그 논문의 직접적 함의다.
+DGU(§4.5)는 이 긴장에 **가중치 최적화로 풀려 하지 말라**고 답한다 — 최적화의 이득이
+추정오차에 잡아먹히므로 종목 수를 정한 뒤 1/N으로 두는 편이 낫다는 게 그 논문의 직접적 함의다.
 DGU가 1/N을 **turnover 기준으로도** 이겼다는 점도 소액 계좌에 유리한 방향이다.
 
 ---
@@ -682,10 +682,10 @@ DGU가 1/N을 **turnover 기준으로도** 이겼다는 점도 소액 계좌에 
 
 1. **DeMiguel, Garlappi & Uppal (2009)** — SSRN(403)·Oxford Academic·LBS 리포지토리·저자 페이지
    모두 본문 PDF 접근에 실패했다. `3000개월 / 6000개월`, `14개 모형 / 7개 데이터셋` 수치는
-   **출판사 초록 텍스트**(EconPapers/RePEc 미러)에서 확보한 것이며, 여러 미러에서 자구가 동일하다.
+   **출판사 초록 텍스트**(EconPapers/RePEc 미러)에서 확보한 것이며 여러 미러에서 자구가 동일하다.
    본문의 시뮬레이션 설정과 가정은 확인하지 못했다.
 2. **Statman (1987)** — Cambridge 출판사 **초록만** 읽었다. ResearchGate PDF는 403.
-   `30 / 40 종목` 수치는 초록 원문이지만, 그 값이 도출된 가정(차입금리, 표본기간, 분산 잔여율 기준)은
+   `30 / 40 종목` 수치는 초록 원문이지만 그 값이 도출된 가정(차입금리, 표본기간, 분산 잔여율 기준)은
    확인하지 못했다. 이 수치를 쓸 때는 "무작위 선택 가정"이라는 단서를 반드시 붙여야 한다.
 3. **Perold & Sharpe (1988)** — CFA Institute 페이지의 초록·요약만 읽었다. 본문 PDF는 유료 장벽.
    "trendless but volatile markets" 등 인용문은 그 요약 페이지에서 온 것이다.
@@ -698,7 +698,7 @@ DGU가 1/N을 **turnover 기준으로도** 이겼다는 점도 소액 계좌에 
    *Journal of Financial Markets* 12(2), 317–336.**
    ScienceDirect 403. RePEc 학술지 페이지와 Yale 워킹페이퍼 초록만 확보했다.
    초록은 *"trade quality ... **significantly increases with experience**"*, *"trading experience ...
-   **significantly helps improve** investors' portfolio performance"* 수준의 **정성적 서술뿐이고,
+   **significantly helps improve** investors' portfolio performance"* 수준의 **정성적 서술뿐이고
    요청받은 효과 크기(bp, %)는 초록에 없다.** 본문을 못 열었으므로
    **이 논문에서는 어떤 정량 수치도 인용하지 않았다.**
    - https://ideas.repec.org/a/eee/finmar/v12y2009i2p317-336.html
@@ -709,31 +709,31 @@ DGU가 1/N을 **turnover 기준으로도** 이겼다는 점도 소액 계좌에 
    **공식 Vanguard 도메인에서 확인하지 못했다.** 검색에 뜬 사본은 전부 Scribd, squarespace,
    pdf4pro, tinkoffjournal 등 **제3자 재호스팅**이라 1차 출처로 인용하지 않았다.
    ★ 대신 내가 실제로 읽은 Vanguard 공식 문서(§4.1)는 **특정 임계·빈도 권고를 명시적으로 거부한다**.
-   따라서 "Vanguard가 5% 밴드를 권고한다"는 통설은, 적어도 내가 접근할 수 있었던 Vanguard 1차 문서만
+   "Vanguard가 5% 밴드를 권고한다"는 통설은, 적어도 내가 접근할 수 있었던 Vanguard 1차 문서만
    놓고 보면 **뒷받침되지 않는다.** 해당 문구가 구판에 실제로 있는지는 미확인 상태다.
 
 7. **full Kelly의 드로다운 확률 공식** — "full Kelly에서 자산이 초기값의 x배까지 떨어질 확률이 x이고,
-   half Kelly에서는 x³"이라는 널리 인용되는 결과의 1차 출처를 확보하지 못했다.
+   half Kelly에서는 x³"이라는 결과는 널리 인용되지만 1차 출처를 확보하지 못했다.
    Thorp (2006) "The Kelly Criterion in Blackjack, Sports Betting, and the Stock Market"의
    ch3/ch7 PDF(sites.oxy.edu 호스팅)를 내려받았으나 **텍스트 레이어 없는 스캔 이미지**여서 읽지 못했다.
    따라서 이 공식은 본문에 인용하지 않았다. 확보한 정량 드로다운 근거는
    **Ziemba & MacLean의 Table 1.3 시뮬레이션**(§4.3)뿐이다.
 
 8. **"half-Kelly = 성장률 75% + 변동성 50%"** — §4.3에서 연속시간 lognormal 가정 하에 직접 유도했고
-   대수적으로 참이지만, **이 문장 형태의 1차 인용문은 확보하지 못했다.**
-   유도에 쓴 `Var G(f) = s²f²`는 Thorp 챕터가 Thorp (2006) eqn (7.3)로 인용한 것이며,
+   대수적으로 참이지만 **이 문장 형태의 1차 인용문은 확보하지 못했다.**
+   유도에 쓴 `Var G(f) = s²f²`는 Thorp 챕터가 Thorp (2006) eqn (7.3)로 인용한 것이며
    나는 Thorp (2006) 원문을 직접 확인하지 못했다.
 
-9. **금융 분야의 outcome bias / 노이즈 하 학습에 대한 엄밀한 1차 문헌** — 요청받았으나
+9. **금융 분야의 outcome bias / 노이즈 하 학습을 다룬 엄밀한 1차 문헌** — 요청받았으나
    해당 주제를 정면으로 다룬 논문을 특정하지 못했다.
-   §2는 대신 Lo(2002)·Seru et al.(2010)·AMS(2014)·Chopra-Ziemba에서 **내가 조합한 논증**이며,
+   §2는 대신 Lo(2002)·Seru et al.(2010)·AMS(2014)·Chopra-Ziemba에서 **내가 조합한 논증**이며
    단일 1차 출처의 주장이 아니다. 그렇게 표시해 두었다.
 
 10. **소액 계좌의 최소 종목 수 가이드** — "계좌 규모가 X 이하일 때 종목 수 Y"라는 형태의
-    1차 권고를 찾지 못했다. §4.6의 서술은 서로 다른 논문의 두 사실을 병치한 것이지,
+    1차 권고를 찾지 못했다. §4.6의 서술은 서로 다른 논문의 두 사실을 병치한 것이지
     어느 논문도 그 트레이드오프를 직접 풀지 않았다.
 
-### 호스팅 출처에 대한 단서
+### 호스팅 출처에 붙이는 단서
 
 11. **Lo (2002) 본문 PDF** — Berkeley 학생단체 서버(traders.studentorg.berkeley.edu) 사본을 읽었다.
     게재본 스캔이 맞다고 판단했지만(페이지 머리말·저작권 표시·페이지 번호 36–52 일치)

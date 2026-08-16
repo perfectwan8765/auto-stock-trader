@@ -4,7 +4,7 @@
 - 목적: `../project/microcap-insider-prereg.md` §3.3(kill 조건 재명세)의 정당성과 기록 형식, 그리고
   `../project/microcap-insider.md` §6(3)의 "결측 퇴출 비율 kill 임계 15%"에 문헌 근거가 있는지 확인
 - ⚠️ **한계**: WWC 1차 문서는 전부 PDF이고 렌더링에 실패해 **본문을 직접 열지 못했다.**
-  아래 WWC 수치는 **1차 문서에 대한 검색 요약**에서 온 것이며, 확정 인용 전에 PDF를 직접 확인해야 한다.
+  아래 WWC 수치는 **1차 문서에 대한 검색 요약**에서 왔다. 확정 인용 전에 PDF를 직접 확인해야 한다.
   COS·Willroth & Atherton은 본문을 직접 읽었다.
 
 ---
@@ -58,7 +58,7 @@ covariates · **inferential criteria**
 ### 1.3 방향성(제약 완화 vs 강화)
 
 Willroth & Atherton은 **완화/강화를 명시적으로 구분하지 않는다.** 다만 편집자들이
-**투명성을 1순위 판단 요인**으로 꼽았고, "개선으로 인식되는 이탈"이 "악화로 인식되는 이탈"보다
+**투명성을 1순위 판단 요인**으로 꼽았고 "개선으로 인식되는 이탈"이 "악화로 인식되는 이탈"보다
 호의적으로 평가됐다고 보고한다.
 
 ---
@@ -83,10 +83,10 @@ Willroth & Atherton은 **완화/강화를 명시적으로 구분하지 않는다
 
 [COS blog](https://www.cos.io/blog/preregistration-plan-not-prison) 및 관련 가이드 기준:
 
-- admin contributor가 update를 요청하고 **변경 사유를 적으며**, **바꾸는 필드만** 수정한다
+- admin contributor가 update를 요청하고 **변경 사유를 적으며** **바꾸는 필드만** 수정한다
 - 초기 등록과 **같은 심사 절차**(48시간 admin 승인)를 거친다
-- ★ **원본 등록은 그대로·날짜와 함께 남고**, 수정은 **별도 타임스탬프의 독립된 개정**으로 기록된다
-- 별도로 **Transparent Changes 문서** 템플릿이 있고, 등록을 시작한 OSF 프로젝트에 업로드해
+- ★ **원본 등록은 그대로·날짜와 함께 남고** 수정은 **별도 타임스탬프의 독립된 개정**으로 기록된다
+- 별도로 **Transparent Changes 문서** 템플릿이 있다. 등록을 시작한 OSF 프로젝트에 업로드해
   결과 보고 시 참조한다
 
 **핵심 원칙**: *"Any decision that you would make differently if you already knew the direction of
@@ -106,7 +106,7 @@ your results is a deviation that requires transparent reporting."*
 
 **구조**: `(전체 감쇠율, 차등 감쇠율)` 평면을 세 영역으로 나눈다 —
 ① 모든 가정에서 저편향 ② 가정에 따라 갈림 ③ 모든 가정에서 고편향.
-**cautious 경계**는 ①만 low attrition으로 보고, **optimistic 경계**는 ①+②를 low로 본다.
+**cautious 경계**는 ①만 low attrition으로 본다. **optimistic 경계**는 ①+②를 low로 본다.
 
 `Table II.1 — Highest Differential Attrition Rate for a Sample to Maintain Low Attrition,
 by Overall Attrition Rate, Under "Optimistic" and "Cautious" Assumptions`
@@ -162,7 +162,7 @@ high attrition 판정의 구체적 귀결(배제인지 조건부 인정인지), 
 2. **시점 범주가 면죄부가 아니다.** *"data-dependent deviations increase risk of bias."*
 3. **제약을 느슨하게 하는 이탈을 별도로 허용하는 규정은 없다.** 다만 편집자들은
    "개선으로 보이는 이탈"에 호의적이었다 — 이는 규범이 아니라 관찰이다.
-4. **15%라는 숫자에 문헌 근거가 없다.** WWC 경계는 **RCT의 처치/대조 간 차등 감쇠**에 대한 것이고,
+4. **15%라는 숫자에 문헌 근거가 없다.** WWC 경계는 **RCT의 처치/대조 간 차등 감쇠**에 대한 것이고
    우리에게는 **처치군이 없어 차등 감쇠가 정의되지 않는다.** 우리가 재는 "보유기간 내 퇴출 비율"은
    WWC가 재는 것과 다른 양이다. **15%는 프로젝트 고유의 임의값이며 그렇게 표기해야 한다.**
 
@@ -173,7 +173,7 @@ WWC 표에서 13% 전체 감쇠에 cautious 6.1%p까지 허용되는 영역 안�
 **"저감쇠(low attrition)" 영역**으로 볼 수 있다.
 
 ⚠️ 단, WWC의 차등 감쇠가 잡으려는 위험(결측이 처치와 상관)의 우리 쪽 대응물은
-**"결측이 신호와 상관"** 이고, 계획서 §7.3(a)가 이미 이를 **가장 위험한 실패 모드**로 지목했다.
+**"결측이 신호와 상관"** 이다. 계획서 §7.3(a)가 이미 이를 **가장 위험한 실패 모드**로 지목했다.
 **그 위험은 전체 결측률 16%로 해소되지 않는다** — 별도로 다뤄야 한다.
 
 ### 4.4 권고 — 무엇을 바꿔야 하는가
