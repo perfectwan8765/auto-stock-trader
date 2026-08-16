@@ -442,16 +442,34 @@ exit 주문 5.0주가 3.0주로 클램프되는데 `reason`은 `"exit"` 그대�
     관찰 기록에 남기고, 원인 조사는 별건으로 뺀다. 나머지 완료 기준은 그대로 충족된 것으로 본다.
   - **그 밖의 예외** — 진짜 실패다. 원인을 잡기 전에는 10단계로 넘어가지 않는다.
 
-#### dry-run 관찰 기록
-
-9단계 실행 후 채운다. 비어 있으면 완료 기준 4를 만족하지 않는다.
+#### dry-run 관찰 기록 (2026-08-16 실행)
 
 | 관찰 항목 | 결과 | 후속 판단 |
 |---|---|---|
-| 실행 결과 (정상 완주 / 미조회 중단 / 그 밖의 예외) | (미기록) | 셋째면 10단계 진행 금지 |
-| `sellable-quantity` 응답에 `sellableQuantity`가 있는가 | (미기록) | 없으면 4-3의 가드가 실제로 발동한다 — 원인 조사는 별건 |
-| 보유 수량에 1e-4 미만이 있는가 | (미기록) | 있으면 dust 하한 도입을 재평가 |
-| `dailyProfitLoss.amount`가 USD 자릿수인가 | (미기록) | 아니면 `--max-loss 70`을 즉시 재산정 |
+| 실행 결과 | **정상 완주** (exit 0, traceback 없음) | — |
+| `sellable-quantity` 응답에 `sellableQuantity`가 있는가 | **관찰 불가** | Phase 6로 이관 |
+| 보유 수량에 1e-4 미만이 있는가 | **관찰 불가** | Phase 6로 이관 |
+| `dailyProfitLoss.amount`가 USD 자릿수인가 | **관찰 불가** | Phase 6로 이관 |
+
+**확인된 것** — 읽기 경로가 실 응답으로 무예외 완주했다. `holdings`·`prices`·`buying-power`
+파싱, 화이트리스트 필터, `compute_rebalance`, 최소금액·이월 처리까지 실 데이터로 돌았다.
+설계대로 **파일을 하나도 남기지 않았다** — 주문로그도, `managed_state.json`·
+`circuit_breaker.json`도 생성되지 않았음을 확인했다.
+
+**⚠️ 9단계 설계의 한계가 드러났다 — 3항목이 관찰 불가였다.** 이유는 두 가지다.
+
+- `managed_state.json`이 없어 관리셋 M이 비었다 → `bot_holdings`가 비어 **매도 대상이 0건** →
+  `get_sellable`이 아예 호출되지 않는다. sellable 응답도, 보유 수량 분포도 볼 수 없다.
+  (dry-run은 bootstrap을 하지 않으므로 이 상태가 계속된다.)
+- `observe_daily_loss`는 `run()`의 **실발주 전용 경로**에 있다. dry-run은 그 앞에서 반환하므로
+  `dailyProfitLoss`가 소비되지 않는다.
+
+즉 **dry-run으로 검증 가능한 것은 읽기·계산 경로까지이고, 매도 게이트와 손실 축은 첫 실발주
+전까지 실 응답으로 확인할 수 없다.** 세 항목을 아래 "Phase 6 관찰 항목"으로 옮긴다.
+
+**운영 메모** — 실행 시점에 USD 가용액이 부족해 목표 대부분이 `insufficient_buying_power`로
+스킵됐다. 스모크 전에 KRW→USD 환전이 선행돼야 한다(진입점 docstring의 "USD 선환전 필수").
+구체 수치는 이 문서에 적지 않는다 — git 추적 대상이다.
 
 ### 10. PR
 
@@ -525,7 +543,8 @@ exit 주문 5.0주가 3.0주로 클램프되는데 `reason`은 `"exit"` 그대�
 3. `scripts/live/rebalance.py`를 `--confirm` 없이 실행해 9단계의 세 결과 중 **"정상 완주"
    또는 "`매도가능수량 미조회` 중단"** 으로 끝난다. (dry-run은 파일을 남기지 않으므로
    파일 생성은 판정 대상이 아니다.)
-4. 9단계의 관찰 항목 3가지와 위 판정 결과가 "dry-run 관찰 기록"에 적혀 있다.
+4. 9단계 판정 결과와 관찰 가능 여부가 "dry-run 관찰 기록"에 적혀 있다.
+   (관찰 불가로 판명된 항목은 "Phase 6 관찰 항목"으로 이관돼 있어야 한다.)
 5. `fix/execution-review` PR이 열려 있고 본문에 스펙 반전 3건이 명시돼 있다.
 6. `docs/project/roadmap.md`의 두 항목에 조치 이력과 이 문서 링크가 있다.
 
@@ -539,7 +558,10 @@ dry-run으로는 확인할 수 없어 첫 실발주(Phase 6 스모크)로 넘긴
 
 | 관찰 항목 | 왜 필요한가 | 결과에 따른 조치 |
 |---|---|---|
-| `execution.settlementDate` 필드명이 실제로 오는가 | `broker.py:307`의 유일 근거가 `roadmap.md:184` 블록뿐 | 안 오면 실제 필드명으로 교체 + `test_get_fill_settlement_date_absent_is_none` 재작성 |
+| `sellable-quantity` 응답에 `sellableQuantity`가 있는가 | 4-3의 전제. dry-run에서는 매도 대상이 0건이라 호출조차 안 됐다 | 없으면 4-3의 가드가 실제로 발동한다 — 원인 조사는 별건 |
+| 보유 수량에 1e-4 미만(dust)이 있는가 | 4-1의 노출 빈도이자, 제외한 dust 하한의 판단 근거 | 있으면 exit 최소수량 하한 도입을 재평가 |
+| `dailyProfitLoss.amount`가 USD 자릿수인가 | `observe_daily_loss`가 실발주 경로에만 있어 dry-run으로는 못 본다 | 아니면 `--max-loss 70`을 즉시 재산정 |
+| `execution.settlementDate` 필드명이 실제로 오는가 | `broker.py`의 유일 근거가 roadmap Phase 0 스키마 블록뿐 | 안 오면 실제 필드명으로 교체 + `test_get_fill_settlement_date_absent_is_none` 재작성 |
 | `settlementDate` 값의 포맷(날짜만 / ISO datetime / 정수) | 유일하게 검증 없이 통과하는 필드 | 포맷 확정 후 `_num`/`_opt_num`에 준하는 정규화 도입 |
 | 실 결제일이 T+1인가 T+2인가 | `interface.py:103-106`이 미결로 남긴 판단 | 확정 후 `interface.py`와 `test_broker.py`의 중복 근거 설명을 한쪽으로 합침 |
 | 동일 `clientOrderId` 재발주 응답이 신규/기존을 구분해 주는가 | 명시적 제외한 "주문 카운터 이중계상"의 전제 | 구분되면 `record_order` 조건부화, 아니면 제외 유지 |
