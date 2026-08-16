@@ -201,6 +201,22 @@ class RebalanceRunner:
             out.append(row)
         return out
 
+    def _live_result(self, plan: RebalancePlan, *, placed=(), rejected=(),
+                     aborted_reason: str | None = None, fills=()) -> RunResult:
+        """실발주 결과를 한 곳에서 만든다.
+
+        종료 경로가 셋(장마감·중단·정상)이라 흩어 두면 필드를 빠뜨린다 — 실제로 장마감
+        경로가 `snapshot`을 통째로 빠뜨리고 있었다.
+        """
+        return RunResult(plan=plan, dry_run=False, placed=list(placed),
+                         rejected=list(rejected), aborted_reason=aborted_reason,
+                         snapshot=self._snapshot, policy=asdict(self.policy),
+                         fills=list(fills))
+
+    def _write_log(self, result: RunResult, rebalance_date: str) -> None:
+        if self.log_dir:
+            write_order_log(result, rebalance_date, Path(self.log_dir))
+
     def run(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool = True) -> RunResult:
         self._snapshot: dict | None = None
         self._account: AccountSnapshot | None = None
@@ -213,8 +229,12 @@ class RebalanceRunner:
         if self.kill_switch_path:
             check_kill_switch(self.kill_switch_path)
         if not self.broker.is_market_open():
-            return RunResult(plan=plan, dry_run=False, aborted_reason="market_closed",
-                             policy=asdict(self.policy))
+            # 기록을 남긴다 — 없으면 "장마감이라 안 했다"와 "cron이 안 돌았다"가 구분되지
+            # 않는다. is_market_open은 파싱 실패도 닫힘으로 접으므로 스키마가 어긋나면
+            # 무기한 조용한 무동작이 된다.
+            result = self._live_result(plan, aborted_reason="market_closed")
+            self._write_log(result, rebalance_date)
+            return result
 
         # 봇 관리분(M)의 당일손익만 손실상한에 반영한다 — 사용자 수동 보유(X)의 손실로
         # 봇이 멈추면 안 된다.
@@ -227,8 +247,11 @@ class RebalanceRunner:
         order_ids: list[tuple[OrderIntent, str]] = []
         rejected: list[tuple[str, str]] = []
         aborted_reason: str | None = None
-        # try/finally: guard()가 루프 중간에 트립(주문건수·손실 상한)해도 이미 발주된
-        # 주문을 M에 반영·영속해 상태 불일치(재실행 시 봇 매수분을 미관리로 오인)를 막는다.
+        # try/except/finally: 루프가 중간에 끊겨도 두 가지를 지킨다 —
+        # (1) finally: 이미 발주된 주문을 M에 반영·영속해 상태 불일치(재실행 시 봇 매수분을
+        #     미관리로 오인)를 막는다.
+        # (2) except: 주문로그를 남긴다. 종전에는 로그 기록이 try 밖이라 예외가 나면
+        #     이미 나간 주문의 기록이 통째로 사라졌다.
         try:
             for i, order in enumerate(plan.orders):  # 매도先→매수 순서(compute_rebalance 보장)
                 if self.cb is not None:
@@ -248,14 +271,27 @@ class RebalanceRunner:
                 else:  # abort (장마감 등) → 잔여 주문 중단
                     aborted_reason = f"aborted_midrun:{code}"
                     break
+        except BaseException as exc:
+            # 발주 루프가 예외로 끊겼다(서킷브레이커 트립·속도제한 소진·미분류 오류·Ctrl-C).
+            # **기록이 가장 필요한 경우가 여기다** — 이미 나간 주문의 client_order_id·snapshot이
+            # 어디에도 없으면 나중에 무엇이 체결됐는지 확인할 실마리가 없다.
+            #
+            # fills는 조회하지 않는다. 장마감·속도제한 소진 상황에서 추가 API 호출이 또
+            # 실패해 시간만 끌고, 그 실패가 원 예외를 가린다.
+            try:
+                self._write_log(
+                    self._live_result(plan, placed=placed, rejected=rejected,
+                                      aborted_reason=f"aborted_error:{type(exc).__name__}"),
+                    rebalance_date)
+            except Exception:  # noqa: BLE001 — 기록 실패가 중단 원인을 가리면 안 된다
+                pass
+            raise
         finally:
             self.state.update_after_place(plan.orders, placed)  # M 갱신(실발주분만)
             self.state.save()
 
-        result = RunResult(plan=plan, dry_run=False, placed=placed,
-                           rejected=rejected, aborted_reason=aborted_reason,
-                           snapshot=self._snapshot, policy=asdict(self.policy),
-                           fills=self._collect_fills(order_ids))
-        if self.log_dir:
-            write_order_log(result, rebalance_date, Path(self.log_dir))
+        result = self._live_result(plan, placed=placed, rejected=rejected,
+                                   aborted_reason=aborted_reason,
+                                   fills=self._collect_fills(order_ids))
+        self._write_log(result, rebalance_date)   # 정상 경로는 실패를 삼키지 않는다
         return result

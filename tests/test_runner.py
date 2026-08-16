@@ -58,10 +58,11 @@ class MockBroker:
 
     def get_fill(self, order_id):
         # 어댑터가 이미 스키마를 해석해 Fill로 준다 — 러너는 camelCase를 모른다.
+        # 값은 Fill 선언대로 float — 어댑터가 _opt_num을 거쳐 넘기므로 문자열이 올 수 없다.
         if order_id not in self._orders:
             return None
-        return Fill(filled_quantity="1", avg_filled_price="101.5", filled_amount="101.5",
-                    commission="0.1", tax="0")
+        return Fill(filled_quantity=1.0, avg_filled_price=101.5, filled_amount=101.5,
+                    commission=0.1, tax=0.0, settlement_date="2026-07-22")
 
 
 def _runner(broker, **kw):
@@ -269,7 +270,8 @@ def test_fills_captured_with_order_id():
     assert len(res.fills) == 1
     f = res.fills[0]
     assert f["symbol"] == "AAPL" and f["order_id"] == "ord-1"
-    assert f["avg_filled_price"] == "101.5" and f["commission"] == "0.1"
+    assert f["avg_filled_price"] == 101.5 and f["commission"] == 0.1
+    assert f["settlement_date"] == "2026-07-22"   # 결제일도 함께 흐른다
 
 
 class _NoQueryBroker(MockBroker):
@@ -478,13 +480,69 @@ def test_order_without_id_is_still_recorded():
     assert res.fills[0]["client_order_id"] == res.placed[0]
 
 
-def test_settlement_date_reaches_order_log():
-    """어댑터가 담은 결제일이 주문로그까지 흘러야 원장이 나중에 읽을 수 있다."""
-    class WithSettlement(MockBroker):
-        def get_fill(self, order_id):
-            return Fill(filled_quantity=1.0, avg_filled_price=101.5,
-                        settlement_date="2026-07-22")
+def test_settlement_date_reaches_order_log(tmp_path):
+    """어댑터가 담은 결제일이 **주문로그 파일까지** 흘러야 원장이 나중에 읽을 수 있다.
 
-    broker = WithSettlement(prices={"AAPL": 100.0}, buying_power=700.0)
-    res = _runner(broker).run({"AAPL": 1.0}, "20260718", dry_run=False)
+    종전에는 이름과 달리 주문로그를 건드리지 않았다 — log_dir을 넘기지 않아 메모리상
+    RunResult.fills만 단언했다. write_order_log가 fills 키를 걸러내거나 json.dumps가
+    죽어도 통과하는 상태였다.
+    """
+    broker = MockBroker(prices={"AAPL": 100.0}, buying_power=700.0)
+    res = _runner(broker, log_dir=str(tmp_path)).run({"AAPL": 1.0}, "20260718", dry_run=False)
     assert res.fills[0]["settlement_date"] == "2026-07-22"
+
+    logged = json.loads((tmp_path / "rebalance_20260718.json").read_text())
+    assert logged["fills"][0]["settlement_date"] == "2026-07-22"
+
+
+def test_order_log_written_when_run_aborts_with_exception(tmp_path):
+    """★ 예외로 끊겨도 이미 나간 주문의 기록이 남는다 — 기록이 가장 필요한 경우다.
+
+    종전에는 RunResult 구성과 write_order_log가 try 밖이라, 루프 중간에
+    CircuitBreakerTripped·BrokerRateLimited·미분류 TossApiError가 나면 발주된 주문의
+    client_order_id·snapshot이 통째로 사라졌다. 상태 영속은 예외 안전한데 감사 로그는
+    아니었던 비대칭이다.
+    """
+    broker = MockBroker(buying_power=700.0)
+    cb = CircuitBreaker(max_orders_per_day=1, max_loss_usd=1e9)
+    with pytest.raises(CircuitBreakerTripped):
+        _runner(broker, circuit_breaker=cb, log_dir=str(tmp_path)).run(
+            TW, "20260718", dry_run=False)
+
+    logged = json.loads((tmp_path / "rebalance_20260718.json").read_text())
+    assert len(logged["placed"]) == 1                      # 나간 주문이 기록됐다
+    assert logged["placed"][0] == broker.placed[0].client_order_id
+    assert logged["aborted_reason"] == "aborted_error:CircuitBreakerTripped"
+    assert logged["snapshot"] is not None                  # 결정 시점 입력도 남는다
+    assert logged["fills"] == []                           # 예외 경로는 추가 조회를 안 한다
+
+
+def test_log_write_failure_does_not_mask_original_exception(tmp_path, monkeypatch):
+    """기록 실패가 중단 원인을 가리면 안 된다 — 운영자가 봐야 할 건 원 예외다."""
+    import execution.runner as runner_mod
+
+    def boom(*a, **kw):
+        raise OSError("디스크 가득")
+
+    monkeypatch.setattr(runner_mod, "write_order_log", boom)
+    broker = MockBroker(buying_power=700.0)
+    cb = CircuitBreaker(max_orders_per_day=1, max_loss_usd=1e9)
+    with pytest.raises(CircuitBreakerTripped):      # OSError가 아니라 원 예외가 올라온다
+        _runner(broker, circuit_breaker=cb, log_dir=str(tmp_path)).run(
+            TW, "20260718", dry_run=False)
+
+
+def test_market_closed_result_keeps_snapshot_and_is_logged(tmp_path):
+    """★ 장마감 반환도 snapshot을 담고 로그를 남긴다.
+
+    종전에는 이 경로만 snapshot을 버리고 write_order_log에도 도달하지 않았다. 로그가 없으면
+    "장마감이라 안 했다"와 "cron이 안 돌았다"가 구분되지 않는다. is_market_open은 파싱
+    실패도 닫힘으로 접으므로, 스키마가 어긋나면 무기한 조용한 무동작이 된다.
+    """
+    broker = MockBroker(market_open=False)
+    res = _runner(broker, log_dir=str(tmp_path)).run(TW, "20260718", dry_run=False)
+
+    assert res.aborted_reason == "market_closed" and res.snapshot is not None
+    logged = json.loads((tmp_path / "rebalance_20260718.json").read_text())
+    assert logged["aborted_reason"] == "market_closed"
+    assert logged["snapshot"]["target_weights"] == TW
