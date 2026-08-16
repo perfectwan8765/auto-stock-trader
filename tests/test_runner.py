@@ -166,6 +166,34 @@ def test_sell_clamp_rounds_down_not_up():
     assert sell.value <= 2.999999999     # 내림(round면 3.0으로 초과)
 
 
+def test_partial_exit_keeps_symbol_in_managed_set():
+    """★ 클램프된 부분매도 exit이 M에서 빠지면 잔량이 영구히 관리 밖으로 나간다.
+
+    holdings 5.0 · sellable 3.0(T+N 미결제) · 목표에서 편출 → exit이 3.0주로 줄어든다.
+    reason이 "exit"으로 남으면 update_after_place가 M에서 discard하고, 잔여 2.0주는
+    M에도 X에도 없어 다음 사이클 bot_holdings에서 빠진다 — 매도·trim·재평가 대상이 아니다.
+    동시에 bot_value가 그만큼 작게 잡혀 buying_power가 과대 산출되고 예산 상한을 넘겨 매수한다.
+    """
+    broker = MockBroker(holdings={"OLD": 5.0}, sellable={"OLD": 3.0}, buying_power=0.0)
+    state = ManagedState(managed={"OLD"}, bootstrapped=True)
+    _runner(broker, managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=False)
+
+    sell = [o for o in broker.placed if o.side == "SELL"][0]
+    assert sell.value == 3.0 and sell.reason == "exit_partial"
+    assert "OLD" in state.managed          # 잔량 2.0주가 있으므로 관리 유지
+
+
+def test_full_exit_leaves_managed_set():
+    # 반대 방향도 고정한다 — 전량 청산이면 M에서 빠져야 한다. 아니면 위 테스트는
+    # "아무것도 M에서 안 빠진다"로도 통과한다.
+    broker = MockBroker(holdings={"OLD": 5.0}, sellable={"OLD": 5.0}, buying_power=0.0)
+    state = ManagedState(managed={"OLD"}, bootstrapped=True)
+    _runner(broker, managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=False)
+
+    sell = [o for o in broker.placed if o.side == "SELL"][0]
+    assert sell.reason == "exit" and "OLD" not in state.managed
+
+
 def test_sell_skipped_when_not_sellable():
     broker = MockBroker(holdings={"NVDA": 3.0}, sellable={"NVDA": 0.0}, buying_power=0.0)
     state = ManagedState(managed={"NVDA"}, bootstrapped=True)

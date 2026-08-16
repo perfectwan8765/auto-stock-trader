@@ -148,7 +148,11 @@ class RebalanceRunner:
                     if clamped <= 0:
                         extra_skips.append((o.symbol, "not_sellable_settlement"))
                         continue
-                    o = replace(o, value=clamped)  # 부분매도(잔량 다음 사이클)
+                    # 줄어든 exit은 reason도 바꾼다. "exit"으로 남으면 update_after_place가
+                    # 잔량이 계좌에 있는데도 M에서 빼버린다 — 그 포지션은 M에도 X에도 없어
+                    # 다음 사이클 bot_holdings에서 제외되고, 매도·trim·재평가 대상이 영영 아니다.
+                    reason = "exit_partial" if o.reason == "exit" else o.reason
+                    o = replace(o, value=clamped, reason=reason)  # 부분매도(잔량 다음 사이클)
                     extra_skips.append((o.symbol, "sell_clamped_to_sellable"))
             new_orders.append(o)
         return RebalancePlan(orders=new_orders, skipped=plan.skipped + extra_skips)

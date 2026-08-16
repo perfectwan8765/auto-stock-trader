@@ -67,12 +67,15 @@ PERF_ITEM = {
 PERF_ITEM_ORDER = ["평균", "표준편차", "연환산 수익률", "정보비율 (IR)", "최대낙폭 (MDD)"]
 
 # 주문 사유(OrderIntent.reason) · 스킵 사유 → 한글.
-ORDER_REASON = {"exit": "청산", "trim": "축소", "enter": "신규", "add": "추가"}
+ORDER_REASON = {"exit": "청산", "exit_partial": "청산(부분)",
+                "trim": "축소", "enter": "신규", "add": "추가"}
 SKIP_REASON = {
     "below_min_order": "최소주문금액 미달",
     "insufficient_buying_power": "매수여력 부족",
     "partial_insufficient_buying_power": "매수여력 부족(부분)",
     "excluded_manual": "수동보유 제외",
+    "not_sellable_settlement": "미결제(매도불가)",
+    "sell_clamped_to_sellable": "매도가능수량으로 축소",
 }
 
 

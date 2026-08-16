@@ -14,7 +14,10 @@ class OrderIntent:
     kind: str            # "amount"(USD, 매수) | "quantity"(주식수, 매도)
     value: float         # 매수=USD 금액, 매도=주식수
     client_order_id: str  # 결정적 멱등키 — 재시도·재개 시 중복주문 방지
-    reason: str          # "exit" | "trim" | "enter" | "add"
+    # "exit"(편출 전량) | "exit_partial"(편출인데 매도가능수량으로 줄어 잔량이 남는다)
+    # | "trim"(초과보유 축소) | "enter"(신규) | "add"(추가매수)
+    # exit / exit_partial 구분은 ManagedState가 관리셋에서 뺄지 정하는 근거다.
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -35,7 +38,9 @@ class RebalancePlan:
 
     orders: list[OrderIntent]
     # (symbol, reason): within_band | below_min_order | insufficient_buying_power
-    #                 | partial_insufficient_buying_power
+    #                 | partial_insufficient_buying_power | excluded_manual
+    #                 | not_sellable_settlement | sell_clamped_to_sellable
+    # 뒤 셋은 러너가 붙인다(compute_rebalance가 아니라) — 화이트리스트·T+N 결제 판단이다.
     skipped: list[tuple[str, str]]
 
 

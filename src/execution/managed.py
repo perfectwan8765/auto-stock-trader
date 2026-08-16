@@ -68,8 +68,13 @@ class ManagedState:
     def update_after_place(self, orders, placed_ids) -> None:
         """실발주된 주문만 반영: 매수→M 추가, 전량 매도(exit)→M 제거.
 
-        ⚠️ 시장가 **전량체결 가정**. exit이 부분체결되면 잔량이 계좌에 남는데 M에서 빠져
-        다음 실행에 사용자 종목으로 오인된다(미완 청산). 체결수량 기반 갱신이 필요하다.
+        `reason == "exit"`만 M에서 뺀다. 매도가능수량(T+N)으로 줄어든 매도는 러너가
+        `"exit_partial"`로 표시하므로, 잔량이 남아 있는 동안 그 종목은 M에 머문다.
+
+        ⚠️ **남은 한계 — 체결 시점 부분체결.** 시장가라도 전량체결이 보장되지는 않는다.
+        발주는 전량이었는데 일부만 체결되면 잔량이 계좌에 남는데 M에서 빠져 다음 실행에
+        사용자 보유로 오인된다(미완 청산). 발주 의도가 아니라 `execution.filledQuantity`
+        기반으로 갱신해야 닫힌다.
         """
         placed = set(placed_ids)
         for o in orders:
