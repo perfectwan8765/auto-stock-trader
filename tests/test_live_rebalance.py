@@ -6,7 +6,7 @@ load_config 등 부작용은 main 안에서만).
 from __future__ import annotations
 
 import importlib.util
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 _PATH = Path(__file__).resolve().parent.parent / "scripts" / "live" / "rebalance.py"
@@ -117,17 +117,46 @@ def test_confirm_places_orders(wired, monkeypatch):
     assert len(broker.placed) == 2
 
 
-def test_circuit_breaker_day_comes_from_signal_date(wired, monkeypatch):
-    """서킷브레이커의 '일일' 경계는 시그널 날짜여야 한다.
+def _clock_fixed_at(moment):
+    """`live.datetime` 대역. now()만 고정하고 나머지는 진짜 datetime에 위임한다."""
 
-    로컬 날짜를 쓰면 정규장이 KST 자정을 넘길 때 경계가 어긋나 카운터가 조기 리셋되고,
-    재기동 우회 방지(E10)가 무력화된다.
+    class _Clock:
+        @staticmethod
+        def now(tz=None):
+            return moment.astimezone(tz) if tz is not None else moment
+
+        @staticmethod
+        def strptime(*a, **kw):
+            return datetime.strptime(*a, **kw)
+
+    return _Clock
+
+
+def test_circuit_breaker_day_is_us_trading_date(wired, monkeypatch):
+    """서킷브레이커의 '일일' 경계는 미국 거래일이다 — 시그널 날짜도 로컬 날짜도 아니다.
+
+    종전 스펙은 시그널 날짜였고 그게 결함이었다. 양방향으로 깨진다 —
+    같은 시그널을 여러 날 재사용하면(--max-age-days 기본 5) 카운터가 날짜를 넘겨 누적되고,
+    시그널을 다시 만들면 같은 캘린더 날인데도 day 키가 바뀌어 _restore가 조기 return,
+    주문건수·손실 상한이 통째로 0이 된다. 후자가 안전판 우회라 더 위험하다.
+
+    종전 docstring이 우려한 "정규장이 KST 자정을 넘길 때 경계가 어긋난다"는 문제의식은
+    그대로 유효하고, 미국 거래일이 그 우려를 로컬 날짜보다 정확히 해결한다 — 한 세션이
+    한 day에 온전히 담긴다.
     """
     _, cb_kwargs, argv = wired
     argv(signal_date="2026-07-16")
     monkeypatch.setattr(live, "_signal_age_days", lambda *a: 0)
+    # 13:00 ET = 익일 02:00 KST. 로컬(KST) 날짜는 7/21, 미국 거래일은 7/20 — 셋 다 다르다.
+    monkeypatch.setattr(
+        live, "datetime",
+        _clock_fixed_at(datetime(2026, 7, 20, 13, 0, tzinfo=live.US_MARKET_TZ)))
+
     live.main()
-    assert cb_kwargs["day"] == "20260716"     # 하이픈 없는 리밸 일자
+
+    assert cb_kwargs["day"] == "20260720"      # 미국 거래일
+    assert cb_kwargs["day"] != "20260716"      # 시그널 날짜로 회귀하면 잡는다
+    assert cb_kwargs["day"] != "20260721"      # 로컬 날짜로 가도 잡는다
 
 
 def test_stale_signal_blocks_live_but_not_dry_run(wired, monkeypatch, capsys):
