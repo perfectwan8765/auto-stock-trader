@@ -343,6 +343,40 @@ def test_daily_loss_not_double_counted_across_runner_reruns(tmp_path):
     cb.guard()                               # 상한 700 미만이므로 통과해야 한다
 
 
+def test_daily_loss_survives_liquidation_of_losing_position(tmp_path):
+    """★ 손실 종목을 청산해도 그날 손실이 지워지지 않는다.
+
+    청산하면 그 종목이 holdings에서 사라지고 daily_pnl에도 없다. 관리셋 합산이 0이나 이익이
+    되므로 단순 대입이면 영속된 손실이 덮어써진다 — **손실을 확정하는 행위가 상한을 해제한다.**
+    상한이 걸려야 할 바로 그날 안전판이 풀리므로 fail-open이다.
+
+    safety 쪽 단위테스트는 CircuitBreaker의 워터마크 동작만 본다. 이 시나리오는 러너가
+    daily_pnl을 어떻게 합산해 넘기는지까지 걸려 있어 러너를 통과시켜야 잡힌다.
+    """
+    path = tmp_path / "cb.json"
+
+    # 1회차 — NVDA -600, MSFT +10. 관리셋 합산 손실 590이 영속된다(상한 700).
+    broker = MockBroker(holdings={"MSFT": 1.0, "NVDA": 1.0},
+                        prices={"MSFT": 100.0, "NVDA": 100.0}, buying_power=0.0,
+                        daily_pnl={"MSFT": 10.0, "NVDA": -600.0})
+    state = ManagedState(managed={"MSFT", "NVDA"}, bootstrapped=True)
+    cb = CircuitBreaker(max_orders_per_day=99, max_loss_usd=700.0, path=path, day="20260718")
+    _runner(broker, managed_state=state, circuit_breaker=cb).run(
+        {"MSFT": 0.5, "NVDA": 0.5}, "20260718", dry_run=False)
+    assert cb.daily_loss_usd == 590.0
+
+    # 2회차 — NVDA 청산 완료. holdings·daily_pnl·관리셋 어디에도 없다.
+    broker2 = MockBroker(holdings={"MSFT": 1.0}, prices={"MSFT": 100.0}, buying_power=0.0,
+                         daily_pnl={"MSFT": 10.0})
+    state2 = ManagedState(managed={"MSFT"}, bootstrapped=True)
+    cb2 = CircuitBreaker(max_orders_per_day=99, max_loss_usd=700.0, path=path, day="20260718")
+    _runner(broker2, managed_state=state2, circuit_breaker=cb2).run(
+        {"MSFT": 1.0}, "20260718", dry_run=False)
+
+    assert cb2.daily_loss_usd == 590.0
+    assert json.loads(path.read_text())["daily_loss_usd"] == 590.0
+
+
 # --- B4: 읽기 호출 축소 ---
 
 def test_sellable_queried_only_for_sell_symbols():

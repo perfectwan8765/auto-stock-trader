@@ -26,7 +26,7 @@ class CircuitBreaker:
         cb.guard()            # 발주 직전 상한 확인(초과 시 CircuitBreakerTripped)
         broker.place(intent)
         cb.record_order()     # 발주 성공 후 카운트
-        cb.observe_daily_loss(usd)  # 브로커가 보고한 당일 손실(절대값). 재실행에 멱등
+        cb.observe_daily_loss(usd)  # 브로커가 보고한 당일 손실(절대값). 그날 최대치로 유지
         cb.record_loss(usd)         # 개별 실현손실 누적(증분)
     상태를 파일로 영속한다. 인메모리만 쓰면 상한에 걸려 멈춘 뒤 프로세스를 다시
     띄우는 것만으로 카운터가 0이 되어 **재시작이 안전판을 우회**한다. `path`를 주면
@@ -41,7 +41,11 @@ class CircuitBreaker:
     손실 축이 둘인 이유: 브로커의 당일손익은 **절대 스냅샷**이라 증분처럼 누적하면
     같은 날 재실행마다 같은 손실이 다시 더해진다. 인메모리일 때는 매 실행이 0에서 시작해
     드러나지 않았고, 영속을 붙이자 "재기동 우회 방지"가 반대로 정당한 매매를 막는 오류가 됐다.
-    → 절대값은 `observe_daily_loss`(대입), 증분은 `record_loss`(누적)로 나눈다.
+    → 절대값은 `observe_daily_loss`(워터마크), 증분은 `record_loss`(누적)로 나눈다.
+
+    ⚠️ `record_loss`는 아직 프로덕션 호출자가 없다. 실현손익을 계산하려면 평단가가 필요한데
+    `cost`는 holdings 응답에만 있고 `AccountSnapshot`이 담지 않는다. 즉 **지금 손실 상한은
+    보유 중인 관리 종목의 미실현 손익만 본다** — 청산으로 확정된 손실은 반영되지 않는다.
     """
 
     def __init__(self, max_orders_per_day: int, max_loss_usd: float,
@@ -95,12 +99,19 @@ class CircuitBreaker:
         self._persist()   # 주문마다 flush — 루프 중간에 죽어도 재시작이 상한을 우회 못 한다
 
     def observe_daily_loss(self, usd: float) -> None:
-        """브로커가 보고한 당일 손실(절대값)을 대입한다. 같은 날 몇 번 호출해도 결과가 같다.
+        """브로커가 보고한 당일 손실(절대값)을 **그날의 최대치로** 유지한다(워터마크).
 
-        이익이면 0이 된다 — 장중에 손실이 이익으로 돌아섰는데 옛 손실이 남아 있으면
-        상한이 근거 없이 걸린다.
+        누적(`+=`)이 아니라 `max`이므로 같은 값을 몇 번 보고해도 결과가 같다 — 절대 스냅샷의
+        멱등성은 그대로다. 다만 **값이 줄어도 따라 내려가지 않는다.**
+
+        단순 대입이면 안 되는 이유: 손실 난 종목을 청산하면 그 손익이 holdings 응답에서
+        사라져 다음 실행이 0을 대입한다. **손실을 확정하는 행위가 상한을 해제한다.**
+
+        대가: 장중에 손실이 이익으로 돌아서도 그날은 상한이 유지된다. 의도한 선택이다 —
+        관측된 드로다운을 근거로 그날 매수를 멈추는 쪽이, 회복을 근거로 재개했다 다시 빠지는
+        쪽보다 낫다고 봤다. 이 축은 **미실현 손익만** 본다(실현손실 배선은 아직 없다).
         """
-        self.daily_loss_usd = max(0.0, usd)
+        self.daily_loss_usd = max(self.daily_loss_usd, max(0.0, usd))
         self._persist()
 
     def record_loss(self, usd: float) -> None:

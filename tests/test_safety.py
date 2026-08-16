@@ -99,15 +99,28 @@ def test_daily_loss_not_double_counted_on_rerun(tmp_path):
     assert cb.daily_loss_usd == 100.0
 
 
-def test_daily_loss_absolute_assignment(tmp_path):
-    # 손실이 줄어들면 그대로 줄어야 한다(대입). 이익으로 돌아서면 0.
+def test_daily_loss_is_watermark_not_assignment(tmp_path):
+    """★ 당일 손실은 그날의 최대치로 유지된다 — 값이 줄어도 따라 내려가지 않는다.
+
+    종전 스펙은 단순 대입이었고("이익 전환 시 0") 그게 결함이었다. 손실 난 관리 종목을
+    청산하면 그 손익이 holdings 응답에서 사라져 다음 실행이 0을 대입한다 — **손실을 확정하는
+    행위가 상한을 해제한다.** 상한이 걸려야 할 바로 그날 안전판이 풀리는 것이라 fail-open이다.
+
+    대가로 장중에 손실이 이익으로 돌아서도 그날은 상한이 유지된다. 의도한 선택이다.
+    """
     path = tmp_path / "cb.json"
     cb = CircuitBreaker(max_orders_per_day=99, max_loss_usd=700.0, path=path, day="20260718")
     cb.observe_daily_loss(300.0)
-    cb.observe_daily_loss(120.0)
-    assert cb.daily_loss_usd == 120.0
-    cb.observe_daily_loss(-50.0)          # 이익 전환
-    assert cb.daily_loss_usd == 0.0
+    assert cb.daily_loss_usd == 300.0
+    cb.observe_daily_loss(120.0)          # 줄어도 최대치 유지
+    assert cb.daily_loss_usd == 300.0
+    cb.observe_daily_loss(-50.0)          # 이익 전환도 지우지 않는다
+    assert cb.daily_loss_usd == 300.0
+    assert json.loads(path.read_text())["daily_loss_usd"] == 300.0
+
+    # 재기동해도 워터마크가 살아 있어야 한다 — 영속이 목적이었다.
+    revived = CircuitBreaker(max_orders_per_day=99, max_loss_usd=700.0, path=path, day="20260718")
+    assert revived.daily_loss_usd == 300.0
 
 
 def test_guard_sums_daily_and_realized(tmp_path):
