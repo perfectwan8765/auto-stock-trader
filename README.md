@@ -122,7 +122,7 @@ flowchart TD
 
 리밸 계산 규칙 (`compute_rebalance`):
 
-- **no-trade 밴드**: 목표 대비 편차가 10% 이내면 아예 거래하지 않는다. 최소 주문금액(집행 하한, 실측 $1)이 밴드를 겸하면 포트폴리오의 0.14% 드리프트에도 주문이 나간다. 근거와 고정 약속은 [`qlib-toss.md`](qlib-toss.md) Phase 5.5.
+- **no-trade 밴드**: 목표 대비 편차가 밴드 이내면 아예 거래하지 않는다. 최소 주문금액은 집행 하한이지 정책이 아니라, 그것만 쓰면 미세한 드리프트에도 주문이 나간다. 밴드 값과 근거는 [`qlib-toss.md`](qlib-toss.md) Phase 5.5.
 - 매도 먼저: 빠질 종목을 전량 팔고 초과분을 정리한 뒤 매수한다(매수 자금 확보).
 - 가용현금 한도: 매수는 현재 현금 범위 안에서만 하고, 넘치는 분량은 다음 주기로 미룬다(매도대금 T+N 정산 반영).
 - 최소금액 미달 스킵: 최소 주문금액에 못 미치는 주문은 건너뛴다.
@@ -177,7 +177,7 @@ qlib이 기본 제공하는 피처셋으로, OHLCV(시가·고가·저가·종�
 - [x] **Phase 3** 모델 학습 + 백테스트 (①배선 ②S&P500 판독 — 엣지 미검출) — `scripts/model_backtest/` 참고
 - [x] **Phase 4** 시그널 생성 (4a 목표비중 JSON + 4b dry-run runner) — `scripts/model_backtest/`
 - [x] **Phase 5** 토스 발주 어댑터 — 리밸/OMS `src/execution`, 응답필드 실측 확정, 안전장치(개선10/13/14 + sellable 상한·max-loss·주문루프 하드닝·시그널 신선도)
-- [x] **Phase 5.5** 집행 캘리브레이션 — **no-trade 밴드**(10%), 집행 실측 기록 3종(결정 스냅샷·체결·holdings), **서킷브레이커 파일영속**(재시작이 상한을 우회하던 결함 해소). 전략과 무관하게 옳은 개선이라 먼저 했다 — [`qlib-toss.md`](qlib-toss.md) Phase 5.5
+- [x] **Phase 5.5** 집행 캘리브레이션 — no-trade 밴드, 집행 실측 기록 3종(결정 스냅샷·체결·holdings), 서킷브레이커 파일영속 — [`qlib-toss.md`](qlib-toss.md) Phase 5.5
 - [ ] **Phase 6~7** 스모크 + 소액 실전 — ⚠️ **진입 조건 미충족.** 두 Phase 다 굴릴 전략이 있다는 전제 위에 있는데 Phase 3(대형주)·Edge v2(마이크로캡 인사이더)가 둘 다 엣지를 부정했다. 상세는 [`qlib-toss.md`](qlib-toss.md) "Phase 6·7 진입 조건"
 
 ### Edge v2 — 미국 소형주 + Insider(Form 4) ⛔ **종료** (2026-08-16)
@@ -303,7 +303,7 @@ tests/             단위테스트 (pytest) — toss·rebalance·safety·runner�
 universe/          유니버스 티커 리스트 (S&P500 전체·파일럿, 마이크로캡 후보·거래가능)
 vendor/            외부 원본 파일 (qlib dump_bin.py) — 수정 금지
 .streamlit/        대시보드 테마 (Streamlit이 자동으로 읽음)
-data/, signals/, execution_logs/, docs/   (gitignore) 생성물·계좌 로그·작업계획서
+data/, signals/, execution_logs/   (gitignore) 생성물·계좌 로그
 qlib-toss.md       전체 작업계획서 (Phase 0~7·개선N·API 스펙·의사결정·Phase 0 실측 상수)
 PREREGISTRATION.md Edge v2 사전등록 — 판정 결과·이탈 2건·정정 3건 (추적됨, 삭제 금지)
 ledger-design.md   실집행 원장(SQLite) 설계 — 구현은 Phase 0
