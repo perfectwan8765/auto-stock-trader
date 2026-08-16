@@ -384,3 +384,20 @@ def test_snapshot_raises_on_unparsable_quantity():
     with pytest.raises(TossError, match="숫자 변환 실패"):
         _broker({"/api/v1/holdings": {"result": {"items": [
             {"symbol": "AAPL", "quantity": "N/A"}]}}}).snapshot([])
+
+
+def test_get_fill_captures_settlement_date():
+    """결제일은 규칙 계산이 아니라 브로커 값을 그대로 담는다.
+
+    미국 현지는 2024-05-28부터 T+1이지만 국내 예탁·외화결제 버퍼로 T+2가 되고, 미국
+    휴장일과 한국 휴장일이 겹치면 규칙으로는 어긋난다. 세법상 양도시기·환율기준일의 근거다.
+    """
+    b = _broker({"/api/v1/orders/ord-1": {"result": {"execution": {
+        "filledQuantity": "1", "averageFilledPrice": "101.5",
+        "filledAt": "2026-07-20T22:31:00.000+09:00", "settlementDate": "2026-07-22"}}}})
+    assert b.get_fill("ord-1").settlement_date == "2026-07-22"
+
+
+def test_get_fill_settlement_date_absent_is_none():
+    b = _broker({"/api/v1/orders/ord-1": {"result": {"execution": {"filledQuantity": "1"}}}})
+    assert b.get_fill("ord-1").settlement_date is None

@@ -100,6 +100,10 @@ class Fill:
     commission: float | None = None
     tax: float | None = None
     filled_at: str | None = None
+    # 결제일. 규칙으로 계산하지 않고 브로커가 준 값을 그대로 담는다 — 미국 현지는
+    # 2024-05-28부터 T+1인데 국내 예탁·외화결제 버퍼로 T+2가 되고, 미국 휴장일과 한국
+    # 휴장일이 겹치면 규칙 계산이 어긋난다. 세법상 양도시기·환율기준일의 근거이기도 하다.
+    settlement_date: str | None = None
 
 
 @runtime_checkable

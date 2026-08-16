@@ -304,4 +304,5 @@ class TossBroker:
             commission=_opt_num(ex.get("commission"), "execution.commission"),
             tax=_opt_num(ex.get("tax"), "execution.tax"),
             filled_at=ex.get("filledAt"),
+            settlement_date=ex.get("settlementDate"),
         )

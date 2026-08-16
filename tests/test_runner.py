@@ -405,3 +405,15 @@ def test_order_without_id_is_still_recorded():
     assert res.placed and len(res.fills) == 1
     assert res.fills[0]["fetch_error"] == "no_order_id"
     assert res.fills[0]["client_order_id"] == res.placed[0]
+
+
+def test_settlement_date_reaches_order_log():
+    """어댑터가 담은 결제일이 주문로그까지 흘러야 원장이 나중에 읽을 수 있다."""
+    class WithSettlement(MockBroker):
+        def get_fill(self, order_id):
+            return Fill(filled_quantity=1.0, avg_filled_price=101.5,
+                        settlement_date="2026-07-22")
+
+    broker = WithSettlement(prices={"AAPL": 100.0}, buying_power=700.0)
+    res = _runner(broker).run({"AAPL": 1.0}, "20260718", dry_run=False)
+    assert res.fills[0]["settlement_date"] == "2026-07-22"
