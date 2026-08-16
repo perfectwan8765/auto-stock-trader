@@ -13,14 +13,35 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from execution.interface import OrderIntent
+from execution.errors import BrokerMarketClosed, BrokerRateLimited, OrderRejected
+from execution.interface import Fill, OrderIntent
 
 from .client import TossClient
-from .errors import TossError
+from .errors import TossApiError, TossError
 
 # market-calendar 시각 포맷: "2026-07-20T22:30:00.000+09:00" (밀리초 3자리 + tz offset).
 # 3.10 datetime.fromisoformat는 이 포맷을 못 읽어 strptime으로 파싱한다.
 _TS_FMT = "%Y-%m-%dT%H:%M:%S.%f%z"
+
+# 토스 에러코드 → execution의 정규화된 실패 어휘. 이 표가 **어댑터에 있다는 것**이 요점이다:
+# 러너가 토스 코드 문자열을 알면 두 번째 브로커를 붙일 때 러너를 고쳐야 한다.
+_RATE_LIMIT_CODES = {"rate-limit-exceeded"}
+_MARKET_CLOSED_CODES = {"amount-order-outside-regular-hours", "order-hours-closed"}
+_ORDER_REJECT_CODES = {"insufficient-buying-power", "market-not-supported-for-stock"}
+
+
+def _normalized(exc: TossApiError):
+    """TossApiError를 execution 예외로 번역. 미분류면 원본을 그대로 돌려준다(전파)."""
+    code = getattr(exc, "code", "") or ""
+    if code in _RATE_LIMIT_CODES:
+        return BrokerRateLimited(str(exc))
+    if code in _MARKET_CLOSED_CODES:
+        err = BrokerMarketClosed(str(exc))
+        err.code = code
+        return err
+    if code in _ORDER_REJECT_CODES:
+        return OrderRejected(code, str(exc))
+    return exc
 
 
 def _result(resp):
@@ -213,4 +234,33 @@ class TossBroker:
             body["orderAmount"] = f"{intent.value}"   # 소수점 매수(US MARKET 전용)
         else:
             body["quantity"] = f"{intent.value}"      # 소수점 매도
-        return self.client.post("/api/v1/orders", json_body=body)
+        try:
+            resp = self.client.post("/api/v1/orders", json_body=body)
+        except TossApiError as exc:
+            raise _normalized(exc) from exc
+        result = _result(resp)
+        if not isinstance(result, dict) or not result.get("orderId"):
+            raise TossError(f"[응답 파싱] 주문 응답에 orderId 없음: {result!r}")
+        return str(result["orderId"])
+
+    def get_fill(self, order_id: str) -> Fill | None:
+        """체결 실측. 미체결이면 None.
+
+        발주 응답에는 체결 정보가 없고 `{orderId, clientOrderId}`뿐이라 슬리피지를 재려면
+        이 조회가 필요하다. 응답 필드명(camelCase)의 해석은 **여기가 유일한 지점**이다 —
+        러너가 알면 스키마가 틀렸을 때 검증할 수 없는 위치에 파싱이 놓인다.
+
+        Returns:
+            체결 정보가 있으면 `Fill`, 아직 미체결이면 `None`.
+        """
+        ex = (self.get_order(order_id) or {}).get("execution") or {}
+        if not ex:
+            return None
+        return Fill(
+            filled_quantity=ex.get("filledQuantity"),
+            avg_filled_price=ex.get("averageFilledPrice"),
+            filled_amount=ex.get("filledAmount"),
+            commission=ex.get("commission"),
+            tax=ex.get("tax"),
+            filled_at=ex.get("filledAt"),
+        )

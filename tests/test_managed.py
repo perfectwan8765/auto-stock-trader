@@ -31,7 +31,10 @@ class MockBroker:
 
     def place(self, intent):
         self.placed.append(intent)
-        return {"status": "ACCEPTED"}
+        return f"ord-{len(self.placed)}"
+
+    def get_fill(self, order_id):
+        return None
 
 
 # --- ManagedState 단위 ---

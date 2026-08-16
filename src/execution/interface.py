@@ -56,8 +56,29 @@ class RunResult:
     snapshot: dict | None = None
 
 
+@dataclass(frozen=True)
+class Fill:
+    """체결 실측. 브로커 응답 스키마를 어댑터가 여기로 번역한다.
+
+    미체결이면 `Broker.get_fill`이 `None`을 돌려주므로, 이 타입의 필드가 전부 None인
+    상태는 "조회는 됐는데 값이 비어 있다"는 별개 상황을 뜻한다.
+    """
+
+    filled_quantity: float | None = None
+    avg_filled_price: float | None = None
+    filled_amount: float | None = None
+    commission: float | None = None
+    tax: float | None = None
+    filled_at: str | None = None
+
+
 class Broker(Protocol):
-    """리밸런싱이 요구하는 브로커 능력. src/toss가 구체 구현(TossBroker)."""
+    """리밸런싱이 요구하는 브로커 능력. src/toss가 구체 구현(TossBroker).
+
+    실패는 `execution.errors`의 정규화된 예외로 던진다 — `BrokerRateLimited` ·
+    `BrokerMarketClosed` · `OrderRejected`. 브로커 고유 에러코드 문자열을 러너가
+    해석하지 않게 하려는 것이다(그러면 두 번째 어댑터를 붙일 때 러너를 고쳐야 한다).
+    """
 
     def get_holdings(self) -> dict[str, float]: ...          # symbol -> 보유 주식수
     def get_prices(self, symbols: list[str]) -> dict[str, float]: ...
@@ -65,5 +86,5 @@ class Broker(Protocol):
     def get_sellable_quantity(self, symbol: str) -> float: ...  # 매도가능수량(T+N 미결제분 제외)
     def get_daily_pnl_usd(self, symbols: set[str]) -> float: ...  # 당일 손익 합(음수=손실)
     def is_market_open(self) -> bool: ...
-    def place(self, intent: OrderIntent) -> dict: ...        # 실발주(멱등키 포함)
-    def get_order(self, order_id: str) -> dict: ...          # 체결 조회(averageFilledPrice)
+    def place(self, intent: OrderIntent) -> str: ...         # 실발주(멱등키 포함) → 주문 ID
+    def get_fill(self, order_id: str) -> Fill | None: ...    # 체결 실측. 미체결·미지원이면 None

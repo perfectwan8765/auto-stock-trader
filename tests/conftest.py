@@ -19,6 +19,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 # Broker 메서드도 RebalanceRunner 생성자도 직접 만지지 않는다 → 리팩터 후 본문 무수정
 # 통과가 곧 "동작이 안 바뀌었다"의 증거가 된다.
 
+def _as_broker_error(code):
+    """테스트 편의: 코드 문자열 → 정규화된 실패 예외. 어댑터가 하는 번역을 흉내낸다."""
+    from execution.errors import BrokerMarketClosed, BrokerRateLimited, OrderRejected
+
+    if code == "rate-limit-exceeded":
+        return BrokerRateLimited(code)
+    if code in ("order-hours-closed", "amount-order-outside-regular-hours"):
+        err = BrokerMarketClosed(code)
+        err.code = code
+        return err
+    if code in ("insufficient-buying-power", "market-not-supported-for-stock"):
+        return OrderRejected(code)
+    # 미분류는 번역하지 않는다 — 어댑터와 같은 정책. 러너가 잡지 않고 상위로 전파해 중단한다.
+    return RuntimeError(code)
+
+
 class _FactoryBroker:
     def __init__(self, holdings, prices, buying_power, sellable, daily_pnl,
                  market_open, place_errors):
@@ -52,14 +68,12 @@ class _FactoryBroker:
     def place(self, intent):
         errs = self._place_errors.get(intent.symbol)
         if errs:
-            exc = RuntimeError(errs.pop(0))
-            exc.code = exc.args[0]
-            raise exc
+            raise _as_broker_error(errs.pop(0))
         self.placed.append(intent)
-        return {"result": {"orderId": f"ord-{len(self.placed)}"}}
+        return f"ord-{len(self.placed)}"
 
-    def get_order(self, order_id):
-        return {}
+    def get_fill(self, order_id):
+        return None
 
 
 def _make_broker(holdings=None, prices=None, buying_power=10_000.0, sellable=None,

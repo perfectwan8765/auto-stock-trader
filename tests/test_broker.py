@@ -11,26 +11,32 @@ import pytest
 
 from execution.interface import OrderIntent
 from toss.broker import TossBroker, _regular_market_open
-from toss.errors import TossError
+from execution.errors import BrokerMarketClosed, BrokerRateLimited, OrderRejected
+from toss.errors import TossApiError, TossError
 
 
 class StubClient:
     """TossClient 대역: 경로별 응답을 주입, post는 기록."""
 
-    def __init__(self, responses=None):
+    def __init__(self, responses=None, post_error=None):
         self.responses = responses or {}
         self.posted: list[tuple[str, dict]] = []
+        self.post_error = post_error
 
     def get(self, path, **kw):
         return self.responses[path]
 
     def post(self, path, json_body=None):
         self.posted.append((path, json_body))
-        return {"status": "ACCEPTED", "clientOrderId": json_body.get("clientOrderId")}
+        if self.post_error is not None:
+            raise self.post_error
+        # 실 응답 형태(Phase 0 실측): result에 orderId·clientOrderId만 온다(체결 정보 없음)
+        return {"result": {"orderId": f"ord-{len(self.posted)}",
+                           "clientOrderId": json_body.get("clientOrderId")}}
 
 
-def _broker(responses=None):
-    return TossBroker(StubClient(responses))
+def _broker(responses=None, post_error=None):
+    return TossBroker(StubClient(responses, post_error))
 
 
 # --- get_holdings (실측: result.items[], quantity 문자열) ---
@@ -214,3 +220,64 @@ def test_place_numeric_fields_are_strings():
     b.place(OrderIntent("AAPL", "BUY", "amount", 100.0, "cid", "enter"))
     _, body = b.client.posted[0]
     assert isinstance(body["orderAmount"], str)   # API 규약: 숫자 필드 문자열
+
+
+# --- B3: place가 orderId를 돌려주고, 에러코드를 정규화된 예외로 번역한다 ---
+
+def test_place_returns_order_id():
+    """러너는 응답 봉투를 모른다 — 어댑터가 orderId 문자열만 건넨다."""
+    b = _broker()
+    assert b.place(OrderIntent("AAPL", "BUY", "amount", 35.0, "rb-abc", "enter")) == "ord-1"
+
+
+def test_place_without_order_id_is_an_error():
+    # orderId가 없으면 체결 추적이 불가능하다 — 성공으로 넘기면 안 된다.
+    class NoIdClient(StubClient):
+        def post(self, path, json_body=None):
+            return {"result": {"clientOrderId": "x"}}
+
+    with pytest.raises(TossError, match="orderId 없음"):
+        TossBroker(NoIdClient()).place(OrderIntent("AAPL", "BUY", "amount", 1.0, "c", "enter"))
+
+
+@pytest.mark.parametrize("code,expected", [
+    ("rate-limit-exceeded", BrokerRateLimited),
+    ("order-hours-closed", BrokerMarketClosed),
+    ("amount-order-outside-regular-hours", BrokerMarketClosed),
+    ("insufficient-buying-power", OrderRejected),
+    ("market-not-supported-for-stock", OrderRejected),
+])
+def test_place_maps_toss_codes_to_normalized_errors(code, expected):
+    """토스 코드 문자열의 해석은 어댑터에서 끝난다. 러너는 예외 타입으로만 분기한다."""
+    b = _broker(post_error=TossApiError("POST", "/api/v1/orders", 422, {"error": {"code": code}}))
+    with pytest.raises(expected):
+        b.place(OrderIntent("AAPL", "BUY", "amount", 1.0, "c", "enter"))
+
+
+def test_place_unknown_code_propagates_as_toss_error():
+    # 미분류 코드는 번역하지 않는다 — 상위로 전파해 중단시키는 게 안전하다.
+    b = _broker(post_error=TossApiError("POST", "/api/v1/orders", 500, {"error": {"code": "wat"}}))
+    with pytest.raises(TossApiError):
+        b.place(OrderIntent("AAPL", "BUY", "amount", 1.0, "c", "enter"))
+
+
+# --- B3: get_fill — 응답 스키마 해석의 유일한 지점 ---
+
+def test_get_fill_parses_execution_fields():
+    b = _broker({"/api/v1/orders/ord-1": {"result": {"execution": {
+        "filledQuantity": "1", "averageFilledPrice": "101.5", "filledAmount": "101.5",
+        "commission": "0.1", "tax": "0", "filledAt": "2026-07-20T22:31:00.000+09:00"}}}})
+    fill = b.get_fill("ord-1")
+    assert fill.avg_filled_price == "101.5" and fill.commission == "0.1"
+    assert fill.filled_at.startswith("2026-07-20")
+
+
+def test_get_fill_returns_none_when_execution_absent():
+    """미체결이면 None. 이 판정이 러너에 있으면 실응답으로 검증할 수 없다(P1-1의 요점).
+
+    시장가라도 발주 직후에는 체결이 안 잡힐 수 있고, 그때 값을 지어내면 슬리피지가 오염된다.
+    """
+    b = _broker({"/api/v1/orders/ord-1": {"result": {"orderId": "ord-1"}}})
+    assert b.get_fill("ord-1") is None
+    b2 = _broker({"/api/v1/orders/ord-2": {"result": {"execution": {}}}})
+    assert b2.get_fill("ord-2") is None

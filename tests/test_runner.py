@@ -9,18 +9,13 @@ import json
 import pytest
 
 from execution.errors import CircuitBreakerTripped, KillSwitchActive
-from execution.interface import OrderIntent
+from conftest import _as_broker_error
+from execution.interface import Fill, OrderIntent
 from execution.managed import ManagedState
 from execution.runner import RebalanceRunner
 from execution.safety import CircuitBreaker
 
 
-class _ApiErr(Exception):
-    """토스 TossApiError 대역 — 덕타이핑 .code만 필요."""
-
-    def __init__(self, code):
-        super().__init__(code)
-        self.code = code
 
 
 class MockBroker:
@@ -57,19 +52,18 @@ class MockBroker:
     def place(self, intent):
         errs = self._place_errors.get(intent.symbol)
         if errs:
-            raise _ApiErr(errs.pop(0))
+            raise _as_broker_error(errs.pop(0))
         self.placed.append(intent)
         oid = f"ord-{len(self.placed)}"
         self._orders[oid] = intent
-        return {"result": {"orderId": oid, "clientOrderId": intent.client_order_id}}
+        return oid
 
-    def get_order(self, order_id):
-        # 실 응답 구조(qlib-toss.md Phase 0): result.execution.{filledQuantity, averageFilledPrice, ...}
-        intent = self._orders.get(order_id)
-        if intent is None:
-            return {}
-        return {"execution": {"filledQuantity": "1", "averageFilledPrice": "101.5",
-                              "filledAmount": "101.5", "commission": "0.1", "tax": "0"}}
+    def get_fill(self, order_id):
+        # 어댑터가 이미 스키마를 해석해 Fill로 준다 — 러너는 camelCase를 모른다.
+        if order_id not in self._orders:
+            return None
+        return Fill(filled_quantity="1", avg_filled_price="101.5", filled_amount="101.5",
+                    commission="0.1", tax="0")
 
 
 def _runner(broker, **kw):
@@ -240,20 +234,27 @@ def test_fills_captured_with_order_id():
 
 
 class _NoQueryBroker(MockBroker):
-    """체결 조회를 지원하지 않는 브로커 — get_order 없이도 발주는 돌아야 한다."""
+    """체결 조회를 지원하지 않는 브로커 — 미지원이면 None을 준다.
 
-    get_order = None
+    종전에는 속성 부재를 인위적으로 위조해야 했다. Protocol이 체결조회를 필수로 선언하면서
+    러너는 hasattr로 선택 취급하던 모순의 대가였다. get_fill이
+    `Fill | None`이라 그 위조가 필요 없다."""
 
-    def __getattribute__(self, name):
-        if name == "get_order":
-            raise AttributeError(name)
-        return super().__getattribute__(name)
+    def get_fill(self, order_id):
+        return None
 
 
-def test_fills_empty_when_broker_cannot_query():
+def test_fills_recorded_without_values_when_broker_cannot_query():
+    """체결 조회 미지원 브로커: 주문 추적 정보는 남기고 체결 값만 빈다.
+
+    종전에는 행 자체를 버려 fills == [] 였다. 그러면 orderId까지 사라져 나중에 다시
+    조회할 실마리가 없다. 값이 비는 것과 기록이 없는 것은 다르다.
+    """
     b = _NoQueryBroker(prices={"AAPL": 100.0})
     res = _runner(b).run({"AAPL": 1.0}, "20260718", dry_run=False)
-    assert res.placed and res.fills == []
+    assert res.placed and len(res.fills) == 1
+    assert res.fills[0]["order_id"] == "ord-1"
+    assert "avg_filled_price" not in res.fills[0]
 
 
 def test_snapshot_records_decision_inputs():
@@ -298,30 +299,16 @@ def test_circuit_breaker_state_absent_in_dry_run(tmp_path):
     assert not path.exists() and b.placed == []
 
 
-class _OddSchemaBroker(MockBroker):
-    """응답 스키마가 예상과 다른 브로커 — 필드명이 틀렸을 때의 거동을 고정한다."""
-
-    def get_order(self, order_id):
-        return {"fills": [{"px": "101.5"}]}   # execution 키가 없다
-
-
 class _RaisingQueryBroker(MockBroker):
-    def get_order(self, order_id):
+    def get_fill(self, order_id):
         raise RuntimeError("boom")
 
 
-def test_fill_schema_mismatch_degrades_without_losing_order(capsys):
-    """필드명이 틀려도 발주 기록은 남고, 사람이 알아챌 수 있게 경고가 뜬다.
-
-    get_order의 필드명은 Phase 0 실측표를 근거로 썼을 뿐 실응답 검증이 안 됐다.
-    틀렸을 때 크래시하거나 조용히 비는 것이 아니라, 기록은 남기고 경고를 내야 한다.
-    """
-    b = _OddSchemaBroker(prices={"AAPL": 100.0})
-    res = _runner(b).run({"AAPL": 1.0}, "20260718", dry_run=False)
-    assert res.placed and len(res.fills) == 1
-    assert res.fills[0]["avg_filled_price"] is None
-    assert res.fills[0]["order_id"] == "ord-1"          # 주문 자체는 추적 가능
-    assert "execution 필드가 없다" in capsys.readouterr().out
+# 스키마 불일치 검증은 tests/test_broker.py로 옮겼다
+# (test_get_fill_returns_none_when_execution_absent). 응답 필드를 해석하는 주체가
+# 러너에서 어댑터로 넘어갔으므로, 스키마가 틀렸는지도 실측 픽스처 옆에서 봐야 한다.
+# 종전 테스트는 print 경고 문자열을 계약 대신 단언하고 있었다 — 러너에 검증할 실응답이
+# 없으니 그것 말고 확인할 게 없었기 때문이다.
 
 
 def test_fill_query_failure_does_not_lose_order():

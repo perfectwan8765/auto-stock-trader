@@ -7,34 +7,27 @@ dry-run(계획만) 또는 실발주(안전장치 통과 후). 브로커는 주�
 보유)는 건드리지 않는다. 예산 상한(budget_usd)으로 계좌 공유 현금 과지출도 막는다.
 개선4(kill switch·서킷브레이커)·개선6(정규장 확인 후 발주).
 
-실발주 루프 하드닝(D): 주문 간 sleep(rate-limit), rate-limit-exceeded 백오프 재시도,
-장마감/개별거부 에러코드별 처리. 손실상한(C): 봇 관리분 당일손익을 서킷브레이커에 배선.
+실발주 루프 하드닝(D): 주문 간 sleep(rate-limit), 속도제한 백오프 재시도,
+장마감/개별거부는 정규화된 예외 타입으로 분기(브로커 코드 문자열은 어댑터가 번역). 손실상한(C): 봇 관리분 당일손익을 서킷브레이커에 배선.
 """
 from __future__ import annotations
 
 import math
 import time
 from pathlib import Path
-from dataclasses import replace
+from dataclasses import asdict, replace
 
-from .errors import ExecutionError
-from .interface import Broker, OrderIntent, RebalanceParams, RebalancePlan, RunResult
+from .errors import (
+    BrokerMarketClosed,
+    BrokerRateLimited,
+    ExecutionError,
+    OrderRejected,
+)
+from .interface import Broker, Fill, OrderIntent, RebalanceParams, RebalancePlan, RunResult
 from .managed import ManagedState
 from .orderlog import write_order_log
 from .rebalance import compute_rebalance
 from .safety import CircuitBreaker, check_kill_switch
-
-# 토스 에러코드(문자열)로 처리 분기. execution↔toss 레이어 분리를 위해 예외 타입 대신
-# 덕타이핑(getattr(e,"code"))으로 코드만 읽는다(개선10: toss.errors import 회피).
-_RATE_LIMIT_CODES = {"rate-limit-exceeded"}
-_MARKET_CLOSED_CODES = {"amount-order-outside-regular-hours", "order-hours-closed"}
-_PER_ORDER_SKIP_CODES = {"insufficient-buying-power", "market-not-supported-for-stock"}
-
-
-def _error_code(exc: Exception) -> str:
-    code = getattr(exc, "code", "")
-    return code if isinstance(code, str) else ""
-
 
 class RebalanceRunner:
     def __init__(
@@ -48,7 +41,7 @@ class RebalanceRunner:
         log_dir: str | None = None,
         rebalance_band: float = 0.10,     # no-trade 밴드(qlib-toss.md Phase 5.5). 성과 보고 조정 금지
         order_sleep_s: float = 1.0,       # 주문 간 간격. ORDER 그룹 실측 6주문/초(0-7)이나 ACCOUNT 1 TPS에 맞춰 보수적
-        rate_limit_retries: int = 3,      # rate-limit-exceeded 재시도 상한
+        rate_limit_retries: int = 3,      # 속도제한 재시도 상한
         rate_limit_backoff_s: float = 2.0,
     ):
         self.broker = broker
@@ -147,57 +140,42 @@ class RebalanceRunner:
 
     def _place_order(self, order: OrderIntent) -> tuple[str, str | None]:
         """단건 발주. rate-limit은 백오프 재시도, 장마감/개별거부는 코드로 분류 반환.
-        반환: ("placed", orderId) | ("skip", code) | ("abort", code). 알 수 없는 오류는 재-raise."""
+        반환: ("placed", 주문ID) | ("skip", 사유) | ("abort", 사유). 미분류 오류는 전파한다."""
         attempts = 0
         while True:
             try:
-                resp = self.broker.place(order)
-                result = resp.get("result", resp) if isinstance(resp, dict) else {}
-                return ("placed", (result or {}).get("orderId"))
-            except Exception as exc:  # noqa: BLE001 — 아래서 코드 미해당이면 재-raise
-                code = _error_code(exc)
-                if code in _RATE_LIMIT_CODES and attempts < self.rate_limit_retries:
-                    attempts += 1
-                    time.sleep(self.rate_limit_backoff_s * attempts)  # 선형 백오프
-                    continue
-                if code in _MARKET_CLOSED_CODES:
-                    return ("abort", code)
-                if code in _PER_ORDER_SKIP_CODES:
-                    return ("skip", code)
-                raise  # 미분류(버그·미지의 코드) → 안전하게 상위로 전파(중단)
+                return ("placed", self.broker.place(order))
+            except BrokerRateLimited:
+                if attempts >= self.rate_limit_retries:
+                    raise
+                attempts += 1
+                time.sleep(self.rate_limit_backoff_s * attempts)  # 선형 백오프
+            except BrokerMarketClosed as exc:
+                return ("abort", getattr(exc, "code", "") or "market_closed")
+            except OrderRejected as exc:
+                return ("skip", exc.code)
+            # 그 밖의 예외는 잡지 않는다 — 미분류(버그·미지의 실패)는 상위로 전파해 중단한다.
 
     def _collect_fills(self, order_ids: list[tuple[OrderIntent, str]]) -> list[dict]:
-        """발주한 주문의 체결 실측을 회수한다. 실패해도 발주 결과를 버리지 않는다.
+        """발주한 주문의 체결 실측을 회수한다. 조회가 실패해도 발주 기록은 버리지 않는다.
 
-        시장가라도 조회 시점에 아직 미체결일 수 있다 — 그 경우 `execution`이 비어 있고,
-        빈 채로 기록한다. 나중에 다시 조회해 채우는 편이 추정으로 메우는 것보다 낫다.
+        시장가라도 조회 시점에 아직 미체결일 수 있다 — 그 경우 어댑터가 `None`을 주고
+        값이 빈 행을 남긴다. 나중에 다시 조회해 채우는 편이 추정으로 메우는 것보다 낫다.
+
+        응답 스키마 해석은 어댑터(`toss.broker`)의 책임이다. 여기서는 `Fill` 필드만 읽는다.
         """
-        if not order_ids or not hasattr(self.broker, "get_order"):
-            return []
         out = []
         for intent, order_id in order_ids:
             row = {"symbol": intent.symbol, "side": intent.side,
                    "client_order_id": intent.client_order_id, "order_id": order_id}
             try:
-                ex = (self.broker.get_order(order_id) or {}).get("execution") or {}
-                row.update({
-                    "filled_quantity": ex.get("filledQuantity"),
-                    "avg_filled_price": ex.get("averageFilledPrice"),
-                    "filled_amount": ex.get("filledAmount"),
-                    "commission": ex.get("commission"),
-                    "tax": ex.get("tax"),
-                    "filled_at": ex.get("filledAt"),
-                })
+                fill = self.broker.get_fill(order_id)
             except Exception as exc:  # noqa: BLE001 — 조회 실패가 발주 기록을 날리면 안 된다
-                row["fetch_error"] = _error_code(exc) or type(exc).__name__
+                row["fetch_error"] = getattr(exc, "code", "") or type(exc).__name__
+            else:
+                if fill is not None:
+                    row.update(asdict(fill))
             out.append(row)
-
-        # 필드명은 Phase 0 실측표(qlib-toss.md)를 근거로 썼을 뿐 실응답으로 검증된 적이 없다.
-        # 응답 스키마가 다르면 전 항목이 None이 되는데, 그건 조용히 넘어가면 안 되는 신호다
-        # — 슬리피지·실효 수수료가 통째로 비게 되고 그 사실이 로그에만 남는다.
-        if out and all(r.get("avg_filled_price") is None and "fetch_error" not in r for r in out):
-            print("⚠️ 체결 조회 응답에 execution 필드가 없다 — 아직 미체결이거나 "
-                  "응답 스키마가 예상과 다르다. qlib-toss.md의 주문 조회 필드를 확인할 것.")
         return out
 
     def run(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool = True) -> RunResult:
