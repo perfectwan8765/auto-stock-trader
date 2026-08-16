@@ -185,6 +185,26 @@ def test_place_numeric_fields_are_strings():
     assert isinstance(body["orderAmount"], str)   # API 규약: 숫자 필드 문자열
 
 
+@pytest.mark.parametrize("qty,expected", [
+    (3e-05, "0.00003"),          # f"{3e-05}" 는 '3e-05'
+    (1e-08, "0.00000001"),       # 클램프 하한(1e-8)
+    (2.5, "2.5"),                # 일반 값은 f"{v}" 와 동일해야 한다
+    (2.999999999, "2.999999999"),
+])
+def test_place_quantity_never_scientific_notation(qty, expected):
+    """★ dust 수량이 지수표기로 나가면 API가 거부하거나 다른 크기로 오해석한다.
+
+    exit 주문은 보유수량 원값을 쓰고 최소수량 하한이 없다. 부분매도(sellable 클램프)로 남은
+    잔량이 1e-4 미만이면 다음 사이클 exit이 정확히 이 구간에 들어간다. 거부 코드가
+    _ORDER_REJECT_CODES 밖이면 러너가 잡지 않아 리밸런싱 전체가 중단된다.
+    """
+    b = _broker()
+    b.place(OrderIntent("OLD", "SELL", "quantity", qty, "cid", "exit"))
+    _, body = b.client.posted[0]
+    assert body["quantity"] == expected
+    assert "e" not in body["quantity"].lower()
+
+
 # --- B3: place가 orderId를 돌려주고, 에러코드를 정규화된 예외로 번역한다 ---
 
 def test_place_returns_order_id():

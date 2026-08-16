@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from execution.errors import BrokerMarketClosed, BrokerRateLimited, OrderRejected
 from execution.interface import AccountSnapshot, Fill, OrderIntent
@@ -64,6 +65,18 @@ def _opt_num(value, field: str) -> float | None:
     """있으면 float, 없으면 None. 토스는 숫자를 문자열로 주는데 그대로 흘리면
     슬리피지(체결가 − 결정가) 계산이 TypeError로 죽는다."""
     return None if value is None else _num(value, field)
+
+
+def _decimal_str(value: float) -> str:
+    """발주 body용 십진 문자열. `f"{v}"`는 1e-4 미만에서 지수표기로 렌더된다.
+
+    `f"{3e-05}"`는 `'3e-05'`다. API 규약은 십진 숫자 문자열이라 거부되거나 다른 크기로
+    오해석된다. exit 주문은 보유수량 원값을 그대로 쓰고 하한이 없어서, 부분매도로 남은
+    dust 잔량이 정확히 이 구간에 들어간다.
+
+    `repr`을 거쳐 `Decimal`로 만들므로 일반 값의 표기는 `f"{v}"`와 **같다** — 지수표기만 펴진다.
+    """
+    return format(Decimal(repr(value)), "f")
 
 
 def _regular_market_open(resp, now: datetime) -> bool:
@@ -270,9 +283,9 @@ class TossBroker:
             "clientOrderId": intent.client_order_id,  # 멱등키
         }
         if intent.kind == "amount":
-            body["orderAmount"] = f"{intent.value}"   # 소수점 매수(US MARKET 전용)
+            body["orderAmount"] = _decimal_str(intent.value)  # 소수점 매수(US MARKET 전용)
         else:
-            body["quantity"] = f"{intent.value}"      # 소수점 매도
+            body["quantity"] = _decimal_str(intent.value)     # 소수점 매도
         try:
             resp = self.client.post("/api/v1/orders", json_body=body)
         except TossApiError as exc:
