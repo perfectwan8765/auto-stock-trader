@@ -329,3 +329,26 @@ def test_fill_query_failure_does_not_lose_order():
     b = _RaisingQueryBroker(prices={"AAPL": 100.0})
     res = _runner(b).run({"AAPL": 1.0}, "20260718", dry_run=False)
     assert res.placed and res.fills[0]["fetch_error"] == "RuntimeError"
+
+
+def test_daily_loss_not_double_counted_across_runner_reruns(tmp_path):
+    """★ P0-1 배선 회귀: 러너가 절대 스냅샷을 증분 API로 넘기지 않는지 본다.
+
+    safety 쪽 단위테스트는 CircuitBreaker의 두 축을 검증할 뿐, **러너가 어느 쪽을
+    호출하는지**는 보지 못한다. 버그는 배선에 있었으므로(observe_daily_loss ↔ record_loss)
+    러너를 통과시켜야 잡힌다. 이 테스트가 없으면 배선을 되돌려도 전 스위트가 통과한다.
+    """
+    path = tmp_path / "cb.json"
+    for _ in range(7):                       # 같은 날 7번 재실행
+        broker = MockBroker(prices={"NVDA": 100.0}, buying_power=700.0,
+                            daily_pnl={"NVDA": -100.0})
+        state = ManagedState(excluded=set(), managed={"NVDA"}, bootstrapped=True)
+        cb = CircuitBreaker(max_orders_per_day=99, max_loss_usd=700.0,
+                            path=path, day="20260718")
+        _runner(broker, managed_state=state, circuit_breaker=cb).run(
+            {"NVDA": 1.0}, "20260718", dry_run=False)
+
+    # 실제 당일손실은 -$100 하나뿐이다. 누적됐다면 700에 도달해 트립했을 것이다.
+    assert cb.daily_loss_usd == 100.0
+    assert json.loads(path.read_text())["daily_loss_usd"] == 100.0
+    cb.guard()                               # 상한 700 미만이므로 통과해야 한다
