@@ -194,6 +194,21 @@ GET  /api/v1/market-calendar/US → result.today: {regularMarket, preMarket, aft
 
 ---
 
+## 환경 노트 — qlib 워커 멈춤 (2026-08-16 확인)
+
+`D.features()`가 이 환경에서 **무한 대기**한다. `qlib.init` 자체는 1초 미만으로 정상이다
+(초기 진단이 `init`을 지목했으나 오진이었다 — 커밋 `ec74313` 메시지의 서술은 이 절로 정정한다).
+
+```python
+qlib.init(provider_uri=<절대경로>, region=REG_US, kernels=1)   # ← 회피책
+```
+
+- 멈추는 지점은 `D.features()`의 **멀티프로세싱 워커**다. 파일 실행·heredoc 모두 동일하므로
+  stdin 문제가 아니다. macOS spawn 방식과의 조합으로 보이나 근본 원인은 미규명
+- `kernels=1`이면 즉시 완료된다. 대량 종목 스캔에서는 느려질 수 있으니 용도에 따라 판단할 것
+- 다른 세션의 동일 저장소에서는 기본 설정으로도 1초 미만에 동작했다 — **환경 의존**이다.
+  따라서 qlib을 쓰는 검증 코드는 실패를 치명으로 다루지 말고 감싸는 편이 안전하다
+
 ## Phase 1 — 개발 환경 구축 (M1 + pyenv)
 
 - `brew install libomp` (LightGBM OpenMP)
