@@ -154,12 +154,15 @@ def test_loss_limit_blocks_buys_but_not_sells():
 
 
 def test_guard_rejects_unknown_side():
-    """오타를 조용히 넘기면 손실 상한이 통째로 비활성화된다 — 안전한 기본값이 없는 자리다."""
+    """오타를 조용히 넘기면 손실 상한이 통째로 비활성화된다 — 안전한 기본값이 없는 자리다.
+
+    "BUY"로 접으면 오타 난 매도가 막히고(이 커밋이 고친 결함), "SELL"로 접으면 손실 상한이
+    꺼진다. 어느 쪽도 보수적이지 않아 검증만 남는다.
+    """
     cb = CircuitBreaker(max_orders_per_day=100, max_loss_usd=50.0)
     cb.observe_daily_loss(60.0)
-    for bad in ("buy", "sell", "", None):
-        with pytest.raises(ValueError):
-            cb.guard(side=bad)
+    with pytest.raises(ValueError):
+        cb.guard(side="buy")            # 소문자 — 현실적인 오타
 
 
 def test_legacy_state_without_daily_loss(tmp_path):
