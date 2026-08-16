@@ -64,7 +64,7 @@ port_analysis_config: &port_analysis_config
       deal_price: close
       # 개선2 비용(편도 0.23% = 수수료0.10%+환전0.03%+슬리피지0.10%).
       # Phase 0(2026-07-20) 실측 반영: 수수료 ~0.10%·환전 ~0.03%(FX 스프레드). sp500 config와 동일.
-      # (pilot은 ①배선 스모크용 — 엣지 판정은 sp500. phase0-findings.md 참고.)
+      # (pilot은 ①배선 스모크용 — 엣지 판정은 sp500. 근거: qlib-toss.md §Phase 0 실측 상수.)
       open_cost: 0.0023
       close_cost: 0.0023
       min_cost: 0                  # 소수점(fractional) → 최소 수수료 없음

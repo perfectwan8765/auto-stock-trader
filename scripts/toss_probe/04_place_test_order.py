@@ -106,7 +106,7 @@ def main() -> None:
     except TossApiError as e:
         print(f"❌ 주문 거부: status={e.status} code={e.code}")
         print(json.dumps(e.body, indent=2, ensure_ascii=False) if isinstance(e.body, (dict, list)) else e.body)
-        print("\n👉 code를 phase0-findings.md에 기록: "
+        print("\n👉 code 판독: "
               "market-not-supported-for-stock=소수점불가 / 최소금액 관련=0-4 산출물 / "
               "amount-order-outside-regular-hours=정규장 재시도")
     except requests.RequestException as e:

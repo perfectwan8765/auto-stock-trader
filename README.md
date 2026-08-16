@@ -175,6 +175,31 @@ qlib이 기본 제공하는 피처셋으로, OHLCV(시가·고가·저가·종�
 - [x] **Phase 5** 토스 발주 어댑터 — 리밸/OMS `src/execution`, 응답필드 실측 확정, 안전장치(개선10/13/14 + sellable 상한·max-loss·주문루프 하드닝·시그널 신선도)
 - [ ] **Phase 6~7** 스모크 테스트 + 소액 실전 — USD 선환전 후 소액 실발주 검증
 
+### Edge v2 — 미국 소형주 + Insider(Form 4) ⛔ **종료** (2026-08-16)
+
+대형주에서 엣지가 안 나온 원인을 **유니버스·신호**로 보고, 마이크로캡 + SEC Form 4
+내부자 공개시장 매수(`P`)로 옮겨 재시도했다. **사전등록 후 1층 게이트에서 종료됐다.**
+
+| 단계 | 결과 |
+|---|---|
+| 0 집행가능성 | ✅ Toss 취급률 **90.7%**, 고정 최소수수료 없음(0.10~0.13%/편도), **호가 미제공** |
+| 0.5 사전등록 | ✅ [`PREREGISTRATION.md`](PREREGISTRATION.md) 커밋 — 이후 스펙 변경은 이탈로 기록 |
+| 1 커버리지·퇴출 | ✅ 이벤트 커버리지 **84.5%**, 보유기간 내 퇴출 **3.1%** — 두 kill 통과 |
+| 2 DERA 45분기 | ✅ 거래행 3.4M → 필터 통과 **60,378건** |
+| 3 이벤트스터디 | ⛔ **불통과** — 실현 가능 BHAR 비관 경계 **−2.93%** vs 임계 **+3.60%** |
+
+**결론: 비용이 아니라 신호가 없다.** 비용 전 총 BHAR이 **+0.21%(t=0.52)** 로 0과 구분되지
+않는다. raw 30거래일 보유수익 +2.15%는 팩터모형 기대수익으로 거의 전부 설명된다.
+스프레드가 0이어도 무비용 임계 1.19%의 **5.6분의 1**이라 집행 개선으로 넘을 수 없다.
+Phase 3(대형주)의 *"병목은 비용이 아니라 신호품질"* 이 다른 유니버스에서 재확인됐다.
+
+진단: 공시 전 모멘텀 최상위 버킷만 +3.63%(t=2.64)로 인용 문헌의 방향은 재현되나
+**비용 후 +0.16%로 본전**이다. 은행 집중(판정 표본의 24%)은 결과를 만들지 않았다.
+
+- 사전등록·이탈 2건(D-1·D-2)·정정 3건(A-1~A-3) 전체 이력: [`PREREGISTRATION.md`](PREREGISTRATION.md)
+- 코드: `scripts/data_pipeline/`(수집·측정 9종) · `scripts/event_study/`(BHAR·BMP/KP·calendar-time)
+- 작업계획서는 `docs/`(git 미추적)에 있다
+
 > Phase 3 결론: 베이스라인(Alpha158+LightGBM, 주간, 미국 대형주)에서는 SPY 대비 exploitable 엣지가 검출되지 않았다. **Phase 0 실측 비용(수수료~0.10%·환전~0.03%/편도)을 반영해 재판정한 결과에도 결론은 동일** — 무비용 초과수익이 사실상 0이라 비용을 낮춰도 순초과수익은 음수(연 -5.6%). 병목은 비용이 아니라 신호품질이다. 현 단계 목적은 학습과 시스템 완성이다.
 
 데이터 → 예측 → 시그널 → 발주계획까지 오프라인 전 구간 검증을 마쳤고, Phase 0 실측(실주문 포함)으로 API 동작을 확정했다. ⚠️ **자동환전이 안 되므로 봇 가동 전 KRW→USD 선환전이 필요**하다(USD 잔액 내에서만 매수 = 안전). 남은 것은 소액 스모크(Phase 6)다.
@@ -265,17 +290,21 @@ scripts/toss_probe/       Phase 0 실측 툴킷 (키 발급 후 순서대로 실
 scripts/data_pipeline/    Phase 2 데이터 파이프라인 (수집→정규화→dump→검증)
 scripts/model_backtest/   Phase 3~4 학습·백테스트·시그널·dry-run (config 구동)
 scripts/live/             실 발주 진입점 (dry-run 기본, --confirm 실발주) — Phase 0 키 필요
+scripts/dashboard/        백테스트·주문로그 뷰어 (`streamlit run scripts/dashboard/app.py`)
 tests/             단위테스트 (pytest) — toss·rebalance·safety·runner·managed·broker·live
-universe/          유니버스 티커 리스트 (S&P500 전체 + 파일럿)
+universe/          유니버스 티커 리스트 (S&P500 전체·파일럿, 마이크로캡 후보·거래가능)
 vendor/            외부 원본 파일 (qlib dump_bin.py) — 수정 금지
+.streamlit/        대시보드 테마 (Streamlit이 자동으로 읽음)
 data/, signals/    (gitignore) 생성물
-qlib-toss.md       전체 작업계획서 (Phase 0~7·개선N·API 스펙·의사결정)
+qlib-toss.md       전체 작업계획서 (Phase 0~7·개선N·API 스펙·의사결정·Phase 0 실측 상수)
+ledger-design.md   실집행 원장(SQLite) 설계 — 구현은 Phase 0
 requirements.txt   의존성 핀 (재현용)
 ```
 
 ## 보안
 
 - 자격증명은 **`.env`에서만** 읽으며 코드/저장소에 넣지 않는다 (`.env.example` 참고).
-- `.env`, `.cache/`(토큰), `phase0-findings.md`(계좌식별자)는 `.gitignore`로 커밋 차단.
+- `.env`, `.cache/`(토큰), `phase0b-execution-gate.md`(계좌 고유 실측값)는 `.gitignore`로 커밋 차단.
+- 실측 결과 중 **계정 무관한 API 계약·비용만** `qlib-toss.md` §Phase 0 실측 상수에 남긴다. 계좌번호·잔액·보유 종목은 커밋하지 않고 API 재조회로 얻는다.
 - 저장소는 **Private** 권장.
 - **계좌 공유 안전**: 토스 계좌를 사용자 수동 보유와 공유하므로, 봇은 **자기가 산 종목(관리셋)·설정 예산 안에서만** 매매한다. 사용자가 직접 산 종목·현금은 건드리지 않는다(화이트리스트, 개선14).

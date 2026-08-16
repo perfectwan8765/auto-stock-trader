@@ -38,3 +38,4 @@ altair==6.2.2
 # --- 테스트 ---
 # src/toss 단위테스트(mock 응답). 개선10/13 예외·redact 회귀 방지.
 pytest==9.1.1
+bidask==2.1.0                 # EDGE 스프레드 추정량 (단계 1(j) 주 추정량)

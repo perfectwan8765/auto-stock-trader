@@ -53,7 +53,7 @@ class RebalanceRunner:
         kill_switch_path: str | None = None,
         circuit_breaker: CircuitBreaker | None = None,
         log_dir: str | None = None,
-        order_sleep_s: float = 1.0,       # 주문 간 간격(ACCOUNT 1 TPS 보수적; ORDER는 0-7 실측 전)
+        order_sleep_s: float = 1.0,       # 주문 간 간격. ORDER 그룹 실측 6주문/초(0-7)이나 ACCOUNT 1 TPS에 맞춰 보수적
         rate_limit_retries: int = 3,      # rate-limit-exceeded 재시도 상한
         rate_limit_backoff_s: float = 2.0,
     ):

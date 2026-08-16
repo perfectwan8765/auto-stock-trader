@@ -11,9 +11,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # ② 확장: 기본 유니버스 = S&P500 전체(+SPY). pilot(41) 재현은 QLIB_UNIVERSE=sp500_pilot.txt로.
 UNIVERSE_FILE = ROOT / "universe" / os.environ.get("QLIB_UNIVERSE", "sp500_full.txt")
-DATA_RAW = ROOT / "data" / "raw"          # yfinance 원본 CSV
-DATA_NORM = ROOT / "data" / "normalized"  # 정규화 CSV (dump_bin 입력)
-QLIB_DIR = ROOT / "data" / "qlib_us"      # 최종 .bin (provider_uri)
+# Edge v2(마이크로캡)는 대형주 번들과 raw/정규화/bin을 공유하면 안 된다 — 02_normalize가
+# data/raw/*.csv를 통째로 글롭하므로 한 디렉터리에 섞으면 유니버스가 오염된다.
+# QLIB_DATASET=_small 이면 data/raw_small · normalized_small · qlib_us_small 로 갈라진다.
+_SUFFIX = os.environ.get("QLIB_DATASET", "")
+DATA_RAW = ROOT / "data" / f"raw{_SUFFIX}"                # yfinance 원본 CSV
+DATA_NORM = ROOT / "data" / f"normalized{_SUFFIX}"        # 정규화 CSV (dump_bin 입력)
+QLIB_DIR = ROOT / "data" / f"qlib_us{_SUFFIX}"            # 최종 .bin (provider_uri)
 DUMP_BIN = ROOT / "vendor" / "dump_bin.py"
 
 # 수집 시작일. 계획서 권장 8~10년 → 여유 두어 2015-01-01.

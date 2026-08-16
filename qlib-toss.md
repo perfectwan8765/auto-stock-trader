@@ -136,9 +136,55 @@
 - **방법:** `POST /api/v1/orders` 1회 호출 후 **응답 헤더**(`X-RateLimit-*` 계열) 확인
 - **확인 산출물:** 주문 API 초당 허용 횟수 → 발주 루프 간격(sleep) 설정값
 
-**Phase 0 완료 게이트:** ✅ **완료(2026-07-20)** — 7개 모두 실측 확정(실주문 포함). 상세 값은
-`phase0-findings.md`. 요약: 계좌=accountSeq·소수점 OK·최소 ≤$1·**자동환전 X(선환전 필요)**·
-**T+2**·ORDER rate-limit 6/s·수수료~0.10%·FX~0.03%. K=15~20 유지. 남은 건 Phase 6 스모크(USD 선환전 후).
+**Phase 0 완료 게이트:** ✅ **완료(2026-07-20)** — 7개 모두 실측 확정(실주문 포함).
+K=15~20 유지. 남은 건 Phase 6 스모크(USD 선환전 후).
+
+### Phase 0 실측 상수 (확정 2026-07-20, 실주문 기반)
+
+계정 고유값(계좌번호·잔액·보유)은 재조회로 얻으므로 여기 남기지 않는다. 아래는 계정과
+무관한 API 계약·비용이며, 코드·config가 이 값을 전제로 짜여 있다.
+
+| 항목 | 실측값 | 소비처 |
+|---|---|---|
+| 계좌 헤더 | `X-Tossinvest-Account` = **`accountSeq`** (`accountNo`는 `400 account-not-found`) | [client.py](src/toss/client.py) |
+| 토큰 | `expires_in` ≈ 86400초(24h), 파일 캐시 | [client.py](src/toss/client.py) |
+| 소수점 주문 | 금액주문(fractional) 가능 | 유니버스·K 산정 |
+| 최소 주문금액 | **≤ $1** ($1 매수 FILLED) → K 상한 사실상 무제한 | `min_order_usd` |
+| 환전 | **자동환전 없음.** KRW 보유·USD 0이면 `422 insufficient-buying-power` → **선환전 필수** | [runner.py](src/execution/runner.py), 운영절차 |
+| 결제주기 | **T+2** (`execution.settlementDate`, 영업일) | `not_sellable_settlement` 가드 |
+| ORDER rate-limit | `X-RateLimit-Limit=6`, `Reset=1` → **6주문/초** | `order_sleep_s` |
+| 그룹별 rate-limit | ACCOUNT 1 TPS · ASSET/STOCK 5 · MARKET_DATA 10 | 상동 |
+| 매매 수수료 | **~0.10~0.13%/편도** (매입액 클수록 0.10%에 수렴, 소액은 최소단위 반올림으로 상승) | backtest `open/close_cost` |
+| 매수 거래세 | 없음 (`cost.tax` = null) | 상동 |
+| 매도 fee | SEC/FINRA `tax` 최소 $0.01 (유의미 규모에선 ~0.001%로 무시가능) | 상동 |
+| FX 스프레드 | `basisPoint=3` = **0.03%/편도** (mid 대비), 호가 유효 5분 | 상동 |
+| 멱등 보장 | 동일 `clientOrderId` 2회 발주 → **1회만 체결·같은 orderId 반환** | 재시도 설계 |
+| 에러 응답 | `{"error":{"code","message","data"}}` **중첩** (flat 아님) | [errors.py](src/toss/errors.py) |
+| market-calendar | 모든 시각 **KST**, `isOpen` 필드 없음 → 정규장 `[start,end)` 비교로 판정 | [broker.py](src/toss/broker.py) |
+
+응답 스키마(`result.items[]`·`lastPrice`·`cashBuyingPower`·`today.regularMarket` 등)는
+[tests/test_broker.py](tests/test_broker.py)에 실측 픽스처로 고정돼 있다 — 스펙 변경 시 테스트가 깨져 알려준다.
+
+**아직 브로커 래퍼가 없는 엔드포인트의 실측 스키마** (구현 시 이 구조를 전제로 짤 것):
+
+```
+POST /api/v1/orders           → result: {orderId, clientOrderId}
+GET  /api/v1/orders/{orderId} → result: {orderId, symbol, side, orderType, timeInForce,
+                                         status, price, quantity, orderAmount, currency,
+                                         orderedAt, canceledAt,
+                                         execution: {filledQuantity, averageFilledPrice,
+                                                     filledAmount, commission, tax,
+                                                     filledAt, settlementDate}}
+GET  /api/v1/stocks?symbols=  → result[]: {symbol, market(NASDAQ), securityType(STOCK),
+                                           status(ACTIVE), currency, delistDate, isinCode, listDate}
+GET  /api/v1/market-calendar/US → result.today: {regularMarket, preMarket, afterMarket} 각 {startTime,endTime}
+                                  + previousBusinessDay / nextBusinessDay (휴장 판정에 사용 가능)
+```
+
+- `execution.filledQuantity`는 **체결수량 기반 관리셋 M 갱신**의 입력이다. 현재 러너는 발주 의도 기준으로만
+  M을 갱신한다([managed.py](src/execution/managed.py) 한계 주석) — 정밀화하려면 위 GET 래퍼부터 추가해야 한다.
+- `market` / `status` + `delistDate` / `listDate`는 OTC 배제·생존편향 교차검증·PIT 편입일 판정에 쓴다.
+- market-calendar 시각 예: 정규장 `22:30~익일 05:00 KST`(=09:30~16:00 ET), preMarket `17:00~22:30`, afterMarket `05:00~08:50`.
 
 ---
 
@@ -173,7 +219,7 @@
 - Alpha158 + LightGBM, config YAML 작성 (라벨은 B2대로 override)
 - **train/valid/test 시간순 분리, test 최근 30% 격리**
 - walk-forward 1회 이상
-- **[개선2] 백테스트=실전 조건 미러링:** 주간 리밸런싱·K·롱온리·소수점(fractional) 포지션·토스 실제 수수료·환전비용을 백테스트에 반영. **Phase 0(2026-07-20) 실측 반영 완료** — 실측치로 교체(phase0-findings.md):
+- **[개선2] 백테스트=실전 조건 미러링:** 주간 리밸런싱·K·롱온리·소수점(fractional) 포지션·토스 실제 수수료·환전비용을 백테스트에 반영. **Phase 0(2026-07-20) 실측 반영 완료** — 실측치로 교체(§Phase 0 실측 상수):
   - 거래 수수료: **~0.10%/편도** (보유 `cost.commission` 실측, 매수·매도 각각) ✅
   - 환전 비용: **~0.03%/편도** (FX 스프레드 3bp 실측; 기존 추측 0.20%의 1/6) ✅
   - 슬리피지: **0.10%** (하한 가정 유지 — 실체결 없어 미측정)

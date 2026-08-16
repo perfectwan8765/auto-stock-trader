@@ -1,7 +1,7 @@
 """TossBroker — execution.interface.Broker의 토스 구체 구현(transport glue).
 
 TossClient(HTTP)를 감싸 리밸런싱 로직에 브로커 능력을 제공한다.
-응답 필드는 Phase 0(2026-07-20) 실측으로 확정 — phase0-findings.md "응답 필드 실측" 참고.
+응답 필드는 Phase 0(2026-07-20) 실측으로 확정 — 구조는 tests/test_broker.py 픽스처가 고정한다.
 공통 래퍼 `{"result": ...}`를 해제하고, market-calendar는 isOpen 필드가 없어 정규장
 시각([start,end)) 비교로 개장을 판정한다.
 
@@ -91,6 +91,42 @@ class TossBroker:
                 continue  # 특정 심볼 미제공은 스킵(sizing에서 가격 없는 종목은 자연 제외)
             out[str(sym)] = _num(price, "prices.lastPrice")
         return out
+
+    def get_prices_raw(self, symbols: list[str]) -> list[dict]:
+        """prices 응답 항목을 파싱 없이 그대로 반환.
+
+        get_prices는 lastPrice만 취하므로 호가(bid/ask) 노출 여부를 알 수 없다.
+        단계 0 집행가능성 게이트에서 원 응답 필드를 확인하는 용도.
+
+        Args:
+            symbols: 조회할 심볼 목록.
+        Returns:
+            result[] 원소를 그대로 담은 리스트. 미제공 심볼은 빠진다.
+        Raises:
+            TossError: 응답이 리스트가 아닐 때.
+        """
+        items = _result(self.client.get("/api/v1/prices", params={"symbols": ",".join(symbols)}))
+        if not isinstance(items, list):
+            raise TossError(f"[응답 파싱] prices 예상 밖 형태: {type(items).__name__}")
+        return items
+
+    def get_stock_info(self, symbols: list[str]) -> dict[str, dict]:
+        """symbol -> 종목 메타(market·securityType·status·listDate·delistDate 등).
+
+        Phase 0-3 실측 엔드포인트. 취급 여부(=응답에 존재하는가), 거래소(OTC 배제),
+        상장/폐지일 확인에 쓴다. 미취급 심볼은 응답에서 빠지므로 결과에 없는 것이 곧 미취급 신호.
+
+        Args:
+            symbols: 조회할 심볼 목록.
+        Returns:
+            symbol -> 원 응답 dict. 미취급 심볼은 키 자체가 없다.
+        Raises:
+            TossError: 응답이 리스트가 아닐 때.
+        """
+        items = _result(self.client.get("/api/v1/stocks", params={"symbols": ",".join(symbols)}))
+        if not isinstance(items, list):
+            raise TossError(f"[응답 파싱] stocks 예상 밖 형태: {type(items).__name__}")
+        return {str(it["symbol"]): it for it in items if it.get("symbol") is not None}
 
     def get_buying_power_usd(self) -> float:
         # currency 쿼리파람 필수(없으면 400). USD 가용 현금 = result.cashBuyingPower.

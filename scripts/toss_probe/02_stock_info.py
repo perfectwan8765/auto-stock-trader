@@ -38,7 +38,7 @@ def main() -> None:
             print(f"   조회 실패: {e}")
 
     print(
-        "\n👉 각 종목의 market/currency/상장상태를 phase0-findings.md에 기록하세요."
+        "\n👉 각 종목의 market/currency/상장상태를 확인하세요 (유니버스 필터 = ACTIVE·USD)."
         "\n   소수점(금액주문) 실제 가능 여부는 04_place_test_order.py로 실측합니다."
     )
 
