@@ -13,16 +13,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import _bootstrap  # noqa: F401
-
-from toss.broker import TossBroker
-from toss.client import TossClient
-from toss.config import load_config
-
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))   # scripts/live 규약: _bootstrap 대신 직접 삽입
+
+from toss.broker import TossBroker  # noqa: E402
+from toss.client import TossClient  # noqa: E402
+from toss.config import load_config  # noqa: E402
 
 
 def main() -> None:
