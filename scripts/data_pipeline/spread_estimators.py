@@ -33,7 +33,6 @@ def abdi_ranaldo(high: pd.Series, low: pd.Series, close: pd.Series, window: int)
     c = np.log(close)
     s2 = 4 * ((c - eta) * (c - eta.shift(-1))).rolling(window).mean()
     est = np.sign(s2) * np.sqrt(np.abs(s2))
-    # ⚠️ 창의 마지막 항이 eta_{t+1}을 쓰므로 날짜 t의 값에 t+1의 고저가 들어 있다.
-    # 이벤트별 조회는 "공시일 이전 최신 관측"을 as-of로 집는데, 그대로 두면 공시 다음 날
-    # (=공시가 주가를 움직이는 바로 그 날)의 범위가 새어 든다 → 한 칸 밀어 as-of를 보수적으로 만든다.
+    # 창의 마지막 항이 eta_{t+1}이라 날짜 t의 값에 t+1의 고저가 들어 있다. as-of 조회가
+    # 공시 다음 날(공시가 주가를 움직이는 날)의 범위를 집게 되므로 한 칸 민다.
     return est.shift(1)

@@ -1,13 +1,12 @@
 """이벤트별 EDGE 스프레드 추정 — 계획서 §5 단계 1(j) (단계 0(e) 이관분).
 
-Toss는 호가를 주지 않아(§3.12(3)) 스프레드를 실측할 경로가 없다. 일봉 OHLC 추정량으로 대체하며
-주 추정량은 EDGE(Ardia·Guidotti·Kroencke, JFE 2024)다 — Corwin-Schultz·Abdi-Ranaldo는 저유동
-구간에서 편의를 갖고 AR은 30.7%의 날에 음수를 뱉는다.
+Toss는 호가를 주지 않아(§3.12(3)) 스프레드를 실측할 경로가 없다. 일봉 OHLC 추정량으로 대체한다.
 
-산출: data/events_spread.csv (symbol, filing_date, mcap_usd, addv, edge_spread)
-      → 단계 3(b)에서 이벤트별로 진입·청산 양쪽에 부과한다. 횡단면 분위 고정은 금지(§9 #15).
+산출: data/events_spread.csv — 추정량 3종 × 창 4개(`{edge,cs,ar}_w{30,60,120,252}`)와
+      단계 3이 실제로 부과하는 `spread_final`. 이벤트별 부과이며 횡단면 분위 고정은 금지(§9 #15).
 
-합격선: 음수 추정 비율 ≤10%. 초과하면 이 유니버스에서 못 쓰는 추정량으로 보고 CS/AR과 대조한다.
+원래 합격선은 "음수 추정 ≤10%"였으나 **세 추정량·네 창이 전부 미달**해 음수 처리 규칙으로
+교체했다(사전등록 이탈 D-2). 실측 음수 비율은 EDGE 14.7% < AR 16.2% << CS 51.9%(w252)다.
 
 구조 통계만 만든다 — 수익률은 계산하지 않는다(계획서 §9 서두).
 
@@ -28,8 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ADDV = ROOT / "data" / "events_addv.csv"
 OUT = ROOT / "data" / "events_spread.csv"
 
-# 창 길이는 추정 노이즈를 지배한다 — 짧으면 음수 추정이 늘어난다. 합격선(음수 ≤10%)을
-# 만족하는 가장 짧은 창을 쓰기 위해 여러 창을 한 번에 잰다.
+# 짧은 창일수록 음수 추정이 늘어난다. 합격선을 만족하는 가장 짧은 창을 고르려고 한 번에 잰다.
 WINDOWS = (30, 60, 120, 252)
 ESTIMATORS = ("edge", "cs", "ar")     # 우선순위 — EDGE가 주 추정량, CS·AR은 대조(§3.12(3))
 PRIMARY = "edge_w252"                 # 대조 결과 채택 — 세 추정량·네 창 중 음수 비율 최저
@@ -71,7 +69,7 @@ def main() -> None:
             for w in WINDOWS:
                 if len(ohlc) <= w:
                     continue
-                # sign=True 필수 — 기본값은 sqrt(|s2|)라 음수 추정이 지워져 합격선 판정이 무의미해진다
+                # sign=False(기본)는 sqrt(|s2|)라 음수가 지워져 합격선 판정이 무의미해진다
                 spread[("edge", w)][s] = edge_rolling(ohlc, window=w, sign=True)
                 spread[("cs", w)][s] = corwin_schultz(ohlc.High, ohlc.Low, w)
                 spread[("ar", w)][s] = abdi_ranaldo(ohlc.High, ohlc.Low, ohlc.Close, w)

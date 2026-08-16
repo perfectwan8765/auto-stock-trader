@@ -1,8 +1,7 @@
 """벤치마크 ETF + Ken French 팩터 수집 — 계획서 §5 단계 1(i), E8.
 
-이게 없으면 D9(FF3/5+MOM·rf 차감·섹터 통제)와 D15(IWC 추가 팩터)의 조정 자체를 못 한다.
-마이크로캡을 SPY에 회귀하면 size premium이 통째로 alpha로 계상된다 — 대형주에서 이미 한 번
-당한 "β 틸트를 알파로 착각"의 이름만 바꾼 변형이다.
+이게 없으면 D9(FF3/5+MOM·rf 차감)와 D15(IWC 추가 팩터)의 조정 자체를 못 한다.
+마이크로캡을 SPY에만 회귀하면 size premium이 통째로 alpha로 잡힌다.
 
 산출:
   data/benchmarks.csv  — IWM·IWC·IJS·SPY 일별 adjclose

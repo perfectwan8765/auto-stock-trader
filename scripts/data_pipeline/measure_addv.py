@@ -38,7 +38,7 @@ def main() -> None:
         return
 
     ev = pd.read_csv(EVENTS, parse_dates=["filing_date"])
-    # 주석 줄을 걸러야 한다 — split()만 쓰면 헤더 단어가 티커로 섞인다
+    # split()만 쓰면 헤더 주석의 단어가 티커로 섞인다
     tradable = {t for line in TRADABLE.read_text().splitlines()
                 if (t := line.strip().upper()) and not t.startswith("#")}
     uni = ev[ev.mcap_usd.notna() & ev.symbol.isin(tradable) & (ev.mcap_usd < args.mcap_max)]
@@ -91,10 +91,7 @@ def main() -> None:
 
 
 def _report_cuts(ok: pd.DataFrame) -> None:
-    """계획서 §3.14(2)(4) 표 — 하한별 잔존율과 시총 밴드 교차.
-
-    이 두 표는 v3.3에서 임시 스크립트로 만들어져 유실됐다(E5 위반). 산출기에 붙여 재현 가능하게 둔다.
-    """
+    """계획서 §3.14(2)(4) 표 — 하한별 잔존율과 시총 밴드 교차."""
     main = ok[ok.mcap_usd < 300e6]
     print(f"\n=== ADDV 하한별 잔존율 (분모 {len(main)} — `<$300M ∩ Toss ∩ ADDV 산출 성공`) ===")
     for lo in (50e3, 100e3, 200e3, 500e3, 1e6):

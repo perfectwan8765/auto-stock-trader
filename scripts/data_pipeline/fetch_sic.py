@@ -42,9 +42,8 @@ def fetch(cik: int) -> dict | None:
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             d = json.loads(resp.read())
+    # JSONDecodeError(ValueError)·IncompleteRead(OSError)까지 — 자매 구현과 같은 범위
     except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError):
-        # JSONDecodeError(ValueError)·IncompleteRead(OSError)까지 잡는다 — 자매 구현
-        # (classify_missing_reason.py·fetch_shares_outstanding.py)과 같은 범위다.
         return None
     return {"cik": cik, "sic": d.get("sic", ""), "sic_description": d.get("sicDescription", ""),
             "entity_name": d.get("name", "")}

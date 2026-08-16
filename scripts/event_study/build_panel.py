@@ -35,11 +35,7 @@ ADDV_MIN = 200e3
 
 
 def read_symbols(path: Path) -> set[str]:
-    """유니버스 파일 파서 — 주석(`#`)·빈 줄을 제외한다.
-
-    `read_text().split()`로 읽으면 헤더 주석의 단어가 전부 티커로 들어온다. 지금은 우연히
-    실제 티커와 충돌하지 않지만, 헤더에 대문자 단어 하나만 추가돼도 유령 심볼이 생긴다.
-    """
+    """유니버스 파일 파서. `split()`만 쓰면 헤더 주석의 단어가 티커로 섞인다."""
     return {t for line in path.read_text().splitlines()
             if (t := line.strip().upper()) and not t.startswith("#")}
 

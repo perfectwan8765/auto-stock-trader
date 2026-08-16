@@ -119,14 +119,12 @@ def spot_check(events: Path, n: int = 5) -> bool:
                 if v:
                     panel[c][row[0]] = float(v)
 
-    # 가격 패널 구간 안의 이벤트만 고른다 — 패널은 주 표본(2023~) 것이라
-    # 2015년 이벤트를 뽑으면 "직전 종가 없음"이 나오는데 그건 조인 오류가 아니다.
+    # 패널은 주 표본(2023~) 것이라 2015년 이벤트의 "직전 종가 없음"은 조인 오류가 아니다.
     lo = min(d for c in panel.values() if c for d in c)
     hi = max(d for c in panel.values() if c for d in c)
     rows = [r for r in rows if lo <= r["filing_date"] <= hi]
     print(f"    (가격 패널 구간 {lo}~{hi} 안의 이벤트 {len(rows):,}건에서 추출)")
 
-    # 이벤트가 많은 종목부터 — 패널에 있을 확률이 높고 손으로 확인하기 쉽다
     freq = collections.Counter(r["symbol"] for r in rows)
     picked, seen = [], set()
     for r in rows:
@@ -150,7 +148,7 @@ def spot_check(events: Path, n: int = 5) -> bool:
             continue
         d = max(prior)
         after = [x for x in panel[r["symbol"]] if x > fd]
-        # 실제 검사 3종 — `d <= fd`는 prior 구성상 자명하므로 단언 대상이 아니다.
+        # `d <= fd`는 prior 구성상 자명하므로 단언 대상이 아니다(정정 A-3).
         gap = (pd.Timestamp(fd) - pd.Timestamp(d)).days
         lag = int(r["filing_lag_days"])
         bad = []

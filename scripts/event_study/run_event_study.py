@@ -64,8 +64,7 @@ def _bhar(px: pd.DataFrame, fac: pd.DataFrame, entry_idx: int, H: int,
         return None
     actual = px.close.iloc[exit_idx] / entry_price - 1
 
-    # 진입일 종가 기준 팩터 수익(= 전일 종가→진입일 종가)은 포지션이 생기기 전 구간을 포함한다.
-    # 포함하면 기대수익이 하루치 β·팩터만큼 과대해지고 BHAR이 그만큼 낮게 나온다.
+    # 진입일 종가 팩터수익은 전일 종가부터의 구간이라 포지션이 생기기 전을 포함한다(정정 A-3).
     win = px.iloc[entry_idx + 1:exit_idx + 1]
     d = fac.reindex(win.index).dropna()
     if len(d) < H * 0.6:               # 팩터 결측이 과하면 기대수익을 못 만든다
@@ -138,7 +137,6 @@ def cross_correlation_inflation(df: pd.DataFrame, H: int) -> tuple[float, float,
     overlap = [(((df.entry_date <= e) & (ends >= s)).sum()) for s, e in zip(df.entry_date, ends)]
     n_bar = float(np.median(overlap))
 
-    # ρ̄ — 상위 빈도 종목의 일별 수익률 상관 (잔차 상관의 대리값)
     rho = df.attrs.get("rho_bar", np.nan)
     infl = float(np.sqrt(max(1.0 + (n_bar - 1) * rho, 1.0))) if np.isfinite(rho) else np.nan
     return n_bar, rho, infl
@@ -175,16 +173,15 @@ def judge(df: pd.DataFrame, n_missing: int, H: int, label: str) -> dict:
     n = len(x)
     mean = float(x.mean())
 
-    # 섹터 통제 — 평균은 그대로, SE가 줄어든다(섹터 분산 제거)
+    # 섹터 통제는 평균이 아니라 SE를 바꾼다. 분모는 SIC가 붙은 행 수여야 한다 — 전체 n을
+    # 쓰면 NaN 제외 std를 큰 수로 나누게 되어 SE가 과소평가된다.
     if "sic2" in df and df.sic2.notna().any():
         dem = (x - df.groupby("sic2").bhar.transform(lambda g: _winsor(g).mean())).dropna()
-        # SIC 결측 행은 dem에서 빠지므로 분모도 그 수로 맞춘다(전체 n을 쓰면 SE가 과소평가된다)
         se_sector = float(dem.std(ddof=1) / np.sqrt(len(dem))) if len(dem) > 1 else np.nan
     else:
         se_sector = float(x.std(ddof=1) / np.sqrt(n))
     se_plain = float(x.std(ddof=1) / np.sqrt(n))
 
-    # BMP 표준화 — 이벤트별 추정 잡음으로 나눈다
     sar = x / (df.sigma_d * np.sqrt(H))
     t_bmp = float(sar.mean() / (sar.std(ddof=1) / np.sqrt(n)))
 
@@ -193,7 +190,6 @@ def judge(df: pd.DataFrame, n_missing: int, H: int, label: str) -> dict:
     t_sector = mean / se_sector
     t_adj = t_bmp / infl if np.isfinite(infl) else np.nan
 
-    # 결측 경계 — h=0
     cov = n / (n + n_missing) if (n + n_missing) else 1.0
     bounds = {h: cov * mean + (1 - cov) * (EXIT_RATE * CATASTROPHE + (1 - EXIT_RATE) * mean * h)
               for h in (0.0, 0.5, 1.0)}
