@@ -42,30 +42,24 @@ class _StubBroker:
     def __init__(self, *_a, **_kw):
         self.placed = []
 
-    def get_holdings(self):
+    def snapshot(self, target_symbols):
+        from execution.interface import AccountSnapshot
+
+        return AccountSnapshot(holdings={}, prices={s: 100.0 for s in target_symbols},
+                               buying_power_usd=1000.0, daily_pnl={})
+
+    def get_sellable(self, symbols):
         return {}
-
-    def get_prices(self, symbols):
-        return {s: 100.0 for s in symbols}
-
-    def get_buying_power_usd(self):
-        return 1000.0
-
-    def get_sellable_quantity(self, symbol):
-        return 0.0
-
-    def get_daily_pnl_usd(self, symbols):
-        return 0.0
 
     def is_market_open(self):
         return True
 
     def place(self, intent):
         self.placed.append(intent)
-        return {"result": {"orderId": f"ord-{len(self.placed)}"}}
+        return f"ord-{len(self.placed)}"
 
-    def get_order(self, order_id):
-        return {}
+    def get_fill(self, order_id):
+        return None
 
 
 @pytest.fixture

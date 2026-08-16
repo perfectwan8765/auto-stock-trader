@@ -57,6 +57,24 @@ class RunResult:
 
 
 @dataclass(frozen=True)
+class AccountSnapshot:
+    """한 시점의 계좌 상태. 읽기 호출을 하나로 접은 결과다.
+
+    종전에는 보유·가격·가용액을 각각 조회해 시점이 섞인 값 위에서 예산을 계산했고,
+    `/api/v1/holdings`를 한 실행에서 두 번 쳤다(보유 + 당일손익). 어댑터가 한 번에
+    만들어 주면 시점 일관성과 호출 절약이 함께 온다.
+
+    `sellable`은 여기 없다 — 계획이 나오기 전에는 쓸 데가 없고, 보유 전 종목을 미리
+    받으면 매도 몇 건에 보유 수십 건을 조회하게 된다. `Broker.get_sellable` 참조.
+    """
+
+    holdings: dict[str, float]        # symbol -> 보유 주식수(전체)
+    prices: dict[str, float]          # target ∪ holdings
+    buying_power_usd: float
+    daily_pnl: dict[str, float]       # symbol -> 당일손익. 러너가 관리셋 M만 합산한다
+
+
+@dataclass(frozen=True)
 class Fill:
     """체결 실측. 브로커 응답 스키마를 어댑터가 여기로 번역한다.
 
@@ -80,11 +98,8 @@ class Broker(Protocol):
     해석하지 않게 하려는 것이다(그러면 두 번째 어댑터를 붙일 때 러너를 고쳐야 한다).
     """
 
-    def get_holdings(self) -> dict[str, float]: ...          # symbol -> 보유 주식수
-    def get_prices(self, symbols: list[str]) -> dict[str, float]: ...
-    def get_buying_power_usd(self) -> float: ...
-    def get_sellable_quantity(self, symbol: str) -> float: ...  # 매도가능수량(T+N 미결제분 제외)
-    def get_daily_pnl_usd(self, symbols: set[str]) -> float: ...  # 당일 손익 합(음수=손실)
+    def snapshot(self, target_symbols: list[str]) -> AccountSnapshot: ...
+    def get_sellable(self, symbols: list[str]) -> dict[str, float]: ...  # T+N 미결제분 제외
     def is_market_open(self) -> bool: ...
     def place(self, intent: OrderIntent) -> str: ...         # 실발주(멱등키 포함) → 주문 ID
     def get_fill(self, order_id: str) -> Fill | None: ...    # 체결 실측. 미체결·미지원이면 None

@@ -11,10 +11,11 @@ TossClient(HTTP)를 감싸 리밸런싱 로직에 브로커 능력을 제공한�
 """
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 
 from execution.errors import BrokerMarketClosed, BrokerRateLimited, OrderRejected
-from execution.interface import Fill, OrderIntent
+from execution.interface import AccountSnapshot, Fill, OrderIntent
 
 from .client import TossClient
 from .errors import TossApiError, TossError
@@ -80,8 +81,12 @@ def _regular_market_open(resp, now: datetime) -> bool:
 
 
 class TossBroker:
-    def __init__(self, client: TossClient):
+    def __init__(self, client: TossClient, sellable_sleep_s: float = 1.0,
+                 sellable_retries: int = 3, sellable_backoff_s: float = 2.0):
         self.client = client
+        self.sellable_sleep_s = sellable_sleep_s
+        self.sellable_retries = sellable_retries
+        self.sellable_backoff_s = sellable_backoff_s
 
     def get_holdings(self) -> dict[str, float]:
         """symbol -> 보유 주식수. 화이트리스트 X 동결의 근거이므로 부분 반환 금지:
@@ -118,6 +123,57 @@ class TossBroker:
         if not isinstance(items, list):
             raise TossError("[응답 파싱] holdings.items가 리스트가 아님")
         return items
+
+    def snapshot(self, target_symbols: list[str]) -> AccountSnapshot:
+        """계좌 상태를 한 시점에 모아 온다. holdings는 **1회만** 조회한다.
+
+        종전에는 러너가 보유·가격·가용액을 따로 부르고 당일손익 때문에 holdings를 또 쳤다.
+        여기서 묶으면 시점이 섞이지 않고 왕복도 준다.
+
+        Args:
+            target_symbols: 목표 비중에 있는 심볼. 가격은 이 집합 ∪ 보유 종목에 대해 받는다.
+        """
+        items = self.get_holdings_raw()
+        holdings: dict[str, float] = {}
+        daily_pnl: dict[str, float] = {}
+        for it in items:
+            sym, qty = it.get("symbol"), it.get("quantity")
+            if sym is None or qty is None:
+                raise TossError(f"[응답 파싱] holdings 항목에 symbol/quantity 누락: {it}")
+            holdings[str(sym)] = _num(qty, "holdings.quantity")
+            amount = (it.get("dailyProfitLoss") or {}).get("amount")
+            if amount is not None:
+                daily_pnl[str(sym)] = _num(amount, "holdings.dailyProfitLoss.amount")
+
+        symbols = sorted(set(target_symbols) | set(holdings))
+        prices = self.get_prices(symbols) if symbols else {}
+        return AccountSnapshot(holdings=holdings, prices=prices,
+                               buying_power_usd=self.get_buying_power_usd(),
+                               daily_pnl=daily_pnl)
+
+    def get_sellable(self, symbols: list[str]) -> dict[str, float]:
+        """심볼별 매도가능수량. 호출 사이에 간격을 두고 속도제한은 재시도한다.
+
+        토스는 이 조회를 단건으로만 받아 심볼 수만큼 왕복한다. ACCOUNT 그룹은 한도가 낮아
+        (러너 주석 기준 1 TPS) 연속 호출하면 rate-limit에 걸리는데, 종전에는 러너가 sleep도
+        재시도도 없이 루프를 돌았다. throttle이 여기 있어야 하는 이유다.
+        """
+        out: dict[str, float] = {}
+        for n, sym in enumerate(symbols):
+            if n and self.sellable_sleep_s > 0:
+                time.sleep(self.sellable_sleep_s)
+            out[sym] = self._sellable_one(sym)
+        return out
+
+    def _sellable_one(self, symbol: str) -> float:
+        for attempt in range(self.sellable_retries + 1):
+            try:
+                return self.get_sellable_quantity(symbol)
+            except BrokerRateLimited:
+                if attempt == self.sellable_retries:
+                    raise
+                time.sleep(self.sellable_backoff_s * (attempt + 1))
+        return 0.0
 
     def get_prices(self, symbols: list[str]) -> dict[str, float]:
         resp = self.client.get("/api/v1/prices", params={"symbols": ",".join(symbols)})
@@ -178,7 +234,10 @@ class TossBroker:
 
     def get_sellable_quantity(self, symbol: str) -> float:
         # T+N 미결제분을 제외한 실제 매도가능수량. 보유수량과 다를 수 있어 매도 상한으로 쓴다.
-        resp = self.client.get("/api/v1/sellable-quantity", params={"symbol": symbol})
+        try:
+            resp = self.client.get("/api/v1/sellable-quantity", params={"symbol": symbol})
+        except TossApiError as exc:
+            raise _normalized(exc) from exc
         result = _result(resp)
         if not isinstance(result, dict) or result.get("sellableQuantity") is None:
             return 0.0  # 알 수 없으면 보수적 0 (매도 안 함)

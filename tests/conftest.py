@@ -35,6 +35,9 @@ def _as_broker_error(code):
     return RuntimeError(code)
 
 
+from execution.interface import AccountSnapshot  # noqa: E402
+
+
 class _FactoryBroker:
     def __init__(self, holdings, prices, buying_power, sellable, daily_pnl,
                  market_open, place_errors):
@@ -47,20 +50,17 @@ class _FactoryBroker:
         self._place_errors = {k: list(v) for k, v in place_errors.items()}
         self.placed = []
 
-    def get_holdings(self):
-        return dict(self._holdings)
+    def snapshot(self, target_symbols):
+        symbols = sorted(set(target_symbols) | set(self._holdings))
+        return AccountSnapshot(
+            holdings=dict(self._holdings),
+            prices={s: self._prices.get(s, 100.0) for s in symbols},
+            buying_power_usd=self._buying_power,
+            daily_pnl=dict(self._daily_pnl),
+        )
 
-    def get_prices(self, symbols):
-        return {s: self._prices.get(s, 100.0) for s in symbols}
-
-    def get_buying_power_usd(self):
-        return self._buying_power
-
-    def get_sellable_quantity(self, symbol):
-        return self._sellable.get(symbol, self._holdings.get(symbol, 0.0))
-
-    def get_daily_pnl_usd(self, symbols):
-        return sum(self._daily_pnl.get(s, 0.0) for s in symbols)
+    def get_sellable(self, symbols):
+        return {s: self._sellable.get(s, self._holdings.get(s, 0.0)) for s in symbols}
 
     def is_market_open(self):
         return self._market_open

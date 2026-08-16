@@ -281,3 +281,49 @@ def test_get_fill_returns_none_when_execution_absent():
     assert b.get_fill("ord-1") is None
     b2 = _broker({"/api/v1/orders/ord-2": {"result": {"execution": {}}}})
     assert b2.get_fill("ord-2") is None
+
+
+# --- B4: snapshot / get_sellable ---
+
+def test_snapshot_fetches_holdings_once():
+    """당일손익 때문에 holdings를 두 번 치던 것을 한 번으로 접었다."""
+    client = StubClient({
+        "/api/v1/holdings": {"result": {"items": [
+            {"symbol": "AAPL", "quantity": "2", "dailyProfitLoss": {"amount": "-13.49"}}]}},
+        "/api/v1/prices": [{"symbol": "AAPL", "lastPrice": "100.0"},
+                           {"symbol": "MSFT", "lastPrice": "200.0"}],
+        "/api/v1/buying-power": {"result": {"cashBuyingPower": "500.0"}},
+    })
+    seen = []
+    real_get = client.get
+    client.get = lambda path, **kw: (seen.append(path), real_get(path, **kw))[1]
+
+    snap = TossBroker(client).snapshot(["MSFT"])
+    assert seen.count("/api/v1/holdings") == 1
+    assert snap.holdings == {"AAPL": 2.0}
+    assert snap.daily_pnl == {"AAPL": -13.49}
+    assert snap.buying_power_usd == 500.0
+    assert set(snap.prices) == {"AAPL", "MSFT"}      # target ∪ 보유
+
+
+def test_get_sellable_throttles_between_symbols(monkeypatch):
+    """ACCOUNT 그룹은 한도가 낮다. 종전에는 러너가 sleep 없이 연속 호출했다."""
+    slept = []
+    monkeypatch.setattr("toss.broker.time.sleep", lambda s: slept.append(s))
+    b = _broker({"/api/v1/sellable-quantity": {"result": {"sellableQuantity": "1.0"}}})
+    b.get_sellable(["AAA", "BBB", "CCC"])
+    assert len(slept) == 2                            # 심볼 사이에만 쉰다
+
+
+def test_get_sellable_retries_rate_limited(monkeypatch):
+    monkeypatch.setattr("toss.broker.time.sleep", lambda s: None)
+    calls = {"n": 0}
+
+    class Flaky(StubClient):
+        def get(self, path, **kw):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise TossApiError("GET", path, 429, {"error": {"code": "rate-limit-exceeded"}})
+            return {"result": {"sellableQuantity": "2.5"}}
+
+    assert TossBroker(Flaky()).get_sellable(["AAA"]) == {"AAA": 2.5}

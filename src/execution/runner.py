@@ -23,7 +23,14 @@ from .errors import (
     ExecutionError,
     OrderRejected,
 )
-from .interface import Broker, Fill, OrderIntent, RebalanceParams, RebalancePlan, RunResult
+from .interface import (
+    AccountSnapshot,
+    Broker,
+    OrderIntent,
+    RebalanceParams,
+    RebalancePlan,
+    RunResult,
+)
 from .managed import ManagedState
 from .orderlog import write_order_log
 from .rebalance import compute_rebalance
@@ -57,7 +64,9 @@ class RebalanceRunner:
         self.rate_limit_backoff_s = rate_limit_backoff_s
 
     def _build_plan(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool) -> RebalancePlan:
-        holdings = self.broker.get_holdings()
+        snap = self.broker.snapshot(sorted(target_weights))
+        self._account = snap
+        holdings = snap.holdings
 
         # 제외셋 X·관리셋 M 결정. dry-run은 state를 절대 변경하지 않는다(read-only) —
         # dry-run이 bootstrapped 플래그를 오염시켜 이후 라이브 보호가 무력화되는 걸 방지(F1).
@@ -77,15 +86,14 @@ class RebalanceRunner:
         # 봇이 관리하는 보유만 리밸 대상 → X 종목은 매도·trim에서 원천 제외
         bot_holdings = {s: q for s, q in holdings.items() if s in managed}
 
-        symbols = sorted(set(target) | set(bot_holdings))
-        prices = self.broker.get_prices(symbols)
+        prices = snap.prices
 
         # 보유 종목 가격 누락 시 예산 계산이 왜곡돼 과지출 위험 → 안전 중단(F2)
         missing = [s for s in bot_holdings if prices.get(s, 0.0) <= 0]
         if missing:
             raise ExecutionError(f"보유 종목 가격 누락 → 예산 계산 불가(안전 중단): {missing}")
 
-        account_bp = self.broker.get_buying_power_usd()
+        account_bp = snap.buying_power_usd
         bot_value = sum(bot_holdings[s] * prices[s] for s in bot_holdings)
 
         if self.budget_usd is None:  # 예산 미설정: 봇 보유 + 계좌현금 전체(구 동작)
@@ -117,12 +125,20 @@ class RebalanceRunner:
 
     def _clamp_sells_to_sellable(self, plan: RebalancePlan) -> RebalancePlan:
         """매도 수량을 매도가능수량(sellable)으로 상한. T+N 미결제분이 있으면 보유수량 >
-        sellable → 초과매도가 거부(리밸 붕괴)되므로, sellable로 줄이거나(부분매도) 0이면 스킵."""
+        sellable → 초과매도가 거부(리밸 붕괴)되므로, sellable로 줄이거나(부분매도) 0이면 스킵.
+
+        조회는 **실제 매도 대상 종목만** 한 번에 묶어서 한다. 보유 전 종목을 받으면
+        매도 2건에 조회 30건이 나가고, throttle sleep까지 곱해져 dry-run도 느려진다.
+        """
+        sell_symbols = sorted({o.symbol for o in plan.orders
+                               if o.side == "SELL" and o.kind == "quantity"})
+        sellable_map = self.broker.get_sellable(sell_symbols) if sell_symbols else {}
+
         new_orders: list[OrderIntent] = []
         extra_skips: list[tuple[str, str]] = []
         for o in plan.orders:
             if o.side == "SELL" and o.kind == "quantity":
-                sellable = self.broker.get_sellable_quantity(o.symbol)
+                sellable = sellable_map.get(o.symbol, 0.0)
                 if sellable <= 0:
                     extra_skips.append((o.symbol, "not_sellable_settlement"))
                     continue
@@ -180,6 +196,7 @@ class RebalanceRunner:
 
     def run(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool = True) -> RunResult:
         self._snapshot: dict | None = None
+        self._account: AccountSnapshot | None = None
         plan = self._build_plan(target_weights, rebalance_date, dry_run)
         if dry_run:
             return RunResult(plan=plan, dry_run=True, snapshot=self._snapshot)
@@ -192,8 +209,8 @@ class RebalanceRunner:
 
         # C: 봇 관리분(M) 당일손익을 손실상한에 배선. 손실이면 서킷브레이커에 시드 →
         # 첫 guard()에서 상한 초과 시 트립(주문 0건). 사용자 수동 보유(X)는 제외.
-        if self.cb is not None and self.state.managed:
-            daily = self.broker.get_daily_pnl_usd(self.state.managed)
+        if self.cb is not None and self.state.managed and self._account is not None:
+            daily = sum(v for s, v in self._account.daily_pnl.items() if s in self.state.managed)
             # 절대 스냅샷이므로 대입한다. 누적하면 같은 날 재실행마다 이중계상된다(P0-1).
             self.cb.observe_daily_loss(-daily)
 

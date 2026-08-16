@@ -10,7 +10,7 @@ import pytest
 
 from execution.errors import CircuitBreakerTripped, KillSwitchActive
 from conftest import _as_broker_error
-from execution.interface import Fill, OrderIntent
+from execution.interface import AccountSnapshot, Fill, OrderIntent
 from execution.managed import ManagedState
 from execution.runner import RebalanceRunner
 from execution.safety import CircuitBreaker
@@ -31,20 +31,17 @@ class MockBroker:
         self.placed: list[OrderIntent] = []
         self._orders: dict[str, OrderIntent] = {}
 
-    def get_holdings(self):
-        return dict(self._holdings)
+    def snapshot(self, target_symbols):
+        symbols = sorted(set(target_symbols) | set(self._holdings))
+        return AccountSnapshot(
+            holdings=dict(self._holdings),
+            prices={s: self._prices.get(s, 100.0) for s in symbols},
+            buying_power_usd=self._buying_power,
+            daily_pnl=dict(self._daily_pnl),
+        )
 
-    def get_prices(self, symbols):
-        return {s: self._prices.get(s, 100.0) for s in symbols}
-
-    def get_buying_power_usd(self):
-        return self._buying_power
-
-    def get_sellable_quantity(self, symbol):
-        return self._sellable.get(symbol, self._holdings.get(symbol, 0.0))
-
-    def get_daily_pnl_usd(self, symbols):
-        return sum(self._daily_pnl.get(s, 0.0) for s in symbols)
+    def get_sellable(self, symbols):
+        return {s: self._sellable.get(s, self._holdings.get(s, 0.0)) for s in symbols}
 
     def is_market_open(self):
         return self._market_open
@@ -339,3 +336,39 @@ def test_daily_loss_not_double_counted_across_runner_reruns(tmp_path):
     assert cb.daily_loss_usd == 100.0
     assert json.loads(path.read_text())["daily_loss_usd"] == 100.0
     cb.guard()                               # 상한 700 미만이므로 통과해야 한다
+
+
+# --- B4: 읽기 호출 축소 ---
+
+def test_sellable_queried_only_for_sell_symbols():
+    """매도 대상만 조회한다 — 보유 전 종목을 미리 받으면 호출이 오히려 늘어난다.
+
+    보유 5종목 중 목표에서 빠진 1종목만 판다. sellable을 스냅샷에 넣었다면 5건을 조회했을 것이다.
+    """
+    asked = []
+
+    class Spy(MockBroker):
+        def get_sellable(self, symbols):
+            asked.append(list(symbols))
+            return super().get_sellable(symbols)
+
+    holdings = {s: 1.0 for s in ("AAA", "BBB", "CCC", "DDD", "EEE")}
+    broker = Spy(holdings=holdings, buying_power=0.0)
+    state = ManagedState(managed=set(holdings), bootstrapped=True)
+    keep = {s: 0.25 for s in ("AAA", "BBB", "CCC", "DDD")}
+    _runner(broker, managed_state=state).run(keep, "20260716", dry_run=True)
+
+    assert asked == [["EEE"]]
+
+
+def test_snapshot_is_fetched_once_per_run():
+    # 시점이 섞이면 예산 계산이 흔들린다 — 한 실행에 한 번만 읽는다.
+    calls = []
+
+    class Spy(MockBroker):
+        def snapshot(self, target_symbols):
+            calls.append(target_symbols)
+            return super().snapshot(target_symbols)
+
+    _runner(Spy(buying_power=700.0)).run(TW, "20260716", dry_run=False)
+    assert len(calls) == 1

@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from execution.errors import ExecutionError
-from execution.interface import OrderIntent
+from execution.interface import AccountSnapshot, OrderIntent
 from execution.managed import ManagedState
 from execution.runner import RebalanceRunner
 
@@ -17,14 +17,17 @@ class MockBroker:
         self._market_open = market_open
         self.placed: list[OrderIntent] = []
 
-    def get_holdings(self):
-        return dict(self._holdings)
+    def snapshot(self, target_symbols):
+        symbols = sorted(set(target_symbols) | set(self._holdings))
+        return AccountSnapshot(
+            holdings=dict(self._holdings),
+            prices={s: self._prices.get(s, 100.0) for s in symbols},
+            buying_power_usd=self._buying_power,
+            daily_pnl={},
+        )
 
-    def get_prices(self, symbols):
-        return {s: self._prices.get(s, 100.0) for s in symbols}
-
-    def get_buying_power_usd(self):
-        return self._buying_power
+    def get_sellable(self, symbols):
+        return {s: self._holdings.get(s, 0.0) for s in symbols}
 
     def is_market_open(self):
         return self._market_open
@@ -137,8 +140,11 @@ def test_dry_run_does_not_flip_bootstrapped(tmp_path):
 def test_missing_price_for_held_symbol_aborts():
     # F2: 봇 보유 종목 가격 누락 → 예산 왜곡·과지출 위험 → 안전 중단.
     class NoPriceBroker(MockBroker):
-        def get_prices(self, symbols):
-            return {}  # 가격 전부 누락
+        def snapshot(self, target_symbols):
+            snap = super().snapshot(target_symbols)
+            return AccountSnapshot(holdings=snap.holdings, prices={},  # 가격 전부 누락
+                                   buying_power_usd=snap.buying_power_usd, daily_pnl={})
+
     broker = NoPriceBroker(holdings={"NVDA": 3.0})
     state = ManagedState(managed={"NVDA"}, bootstrapped=True)
     with pytest.raises(ExecutionError):
