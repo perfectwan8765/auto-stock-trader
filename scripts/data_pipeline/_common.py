@@ -42,5 +42,41 @@ def read_universe() -> list[str]:
     return out
 
 
+COLLECT_REPORT = DATA_RAW / "_collect_report.json"   # 01_collect 산출, 04_verify 게이트 입력
+STALE_MAX_LAG_DAYS = 10       # 이 일수를 넘게 뒤처진 종목이 있으면 검증 실패
+
+
+def stale_symbols(report: dict, max_lag_days: int = STALE_MAX_LAG_DAYS) -> list[tuple[str, int]]:
+    """수집 리포트에서 뒤처진 종목을 (symbol, lag) 목록으로 반환.
+
+    01_collect는 수집 실패 시 직전 CSV를 유지하고(개선9) exit 0으로 끝난다. 그 폴백 사실이
+    하류로 전달되지 않으면 6개월 멈춘 종목이 있어도 파이프라인이 성공으로 끝나고, 그 가격이
+    학습·예측을 거쳐 잘못된 시그널이 된다. 리포트를 게이트로 삼아 그 경로를 끊는다.
+    """
+    newest = max((r.get("last_date") or "" for r in report.get("symbols", {}).values()),
+                 default="")
+    if not newest:
+        return []
+    ref = _date(newest)
+    out = []
+    for sym, r in sorted(report.get("symbols", {}).items()):
+        d = _date(r.get("last_date") or "")
+        if d is None or ref is None:
+            continue
+        lag = (ref - d).days
+        if lag > max_lag_days:
+            out.append((sym, lag))
+    return out
+
+
+def _date(s: str):
+    from datetime import date
+    try:
+        y, m, d = (int(x) for x in s[:10].split("-"))
+        return date(y, m, d)
+    except (ValueError, AttributeError):
+        return None
+
+
 def log(msg: str) -> None:
     print(msg, flush=True)

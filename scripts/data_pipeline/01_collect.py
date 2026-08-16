@@ -14,12 +14,14 @@ auto_adjust=False 로 raw close와 adjclose를 함께 받는다(정규화에서 
 from __future__ import annotations
 
 import argparse
+import json
 import time
+from datetime import datetime, timezone
 
 import pandas as pd
 import yfinance as yf
 
-from _common import DATA_RAW, START_DATE, log, read_universe
+from _common import COLLECT_REPORT, DATA_RAW, START_DATE, log, read_universe
 
 MAX_RETRIES = 4
 MIN_ROWS = 200  # 이보다 적으면 수집 실패로 간주(10년치면 수천 행이어야 정상)
@@ -34,6 +36,14 @@ _RENAME = {
     "Volume": "volume",
 }
 _COLS = ["date", "open", "high", "low", "close", "adjclose", "volume", "symbol"]
+
+
+def _last_date_of(path) -> str | None:
+    """폴백으로 유지된 CSV의 마지막 날짜 — stale 판정의 근거값."""
+    try:
+        return str(pd.read_csv(path, usecols=["date"])["date"].iloc[-1])[:10]
+    except (OSError, ValueError, KeyError, IndexError):
+        return None
 
 
 def _download_one(symbol: str, start: str) -> pd.DataFrame | None:
@@ -85,6 +95,8 @@ def main() -> None:
     log(f"📥 수집 시작: {len(symbols)}종목, start={args.start} → {DATA_RAW}")
     ok, kept_stale, failed = [], [], []
 
+    report: dict[str, dict] = {}
+
     for i, sym in enumerate(symbols, 1):
         log(f"[{i}/{len(symbols)}] {sym}")
         df = _download_one(sym, args.start)
@@ -93,10 +105,12 @@ def main() -> None:
             df.to_csv(out_path, index=False)
             log(f"   ✅ {len(df)}행 → {out_path.name}")
             ok.append(sym)
+            report[sym] = {"last_date": str(df["date"].iloc[-1])[:10], "stale": False}
         elif out_path.exists():
             # 폴백: 직전 정상 CSV 유지(개선9)
             log(f"   ⚠️ 수집 실패 — 기존 {out_path.name} 유지(폴백)")
             kept_stale.append(sym)
+            report[sym] = {"last_date": _last_date_of(out_path), "stale": True}
         else:
             log(f"   ❌ 수집 실패, 폴백 없음")
             failed.append(sym)
@@ -108,6 +122,12 @@ def main() -> None:
         log(f"  폴백유지(직전 데이터): {', '.join(kept_stale)}")
     if failed:
         log(f"  실패(데이터 없음):    {', '.join(failed)}")
+
+    # 폴백 사실을 파일로 남긴다 — 로그만으로는 하류(02·03·04)가 알 수 없다
+    COLLECT_REPORT.write_text(json.dumps(
+        {"collected_at": datetime.now(timezone.utc).isoformat(), "symbols": report},
+        indent=2, ensure_ascii=False))
+    log(f"수집 리포트: {COLLECT_REPORT.name} ({len(report)}종목)")
 
     if not ok and not kept_stale:
         raise SystemExit("[치명] 사용 가능한 데이터가 하나도 없음")

@@ -5,10 +5,13 @@
   2) 거래달력 비어있지 않고 마지막 날짜 존재(경고: 10일 초과 지연 시)
   3) instruments 수가 유니버스와 대체로 일치
   4) 샘플 종목 $close/$factor 등 최근 구간 로드 → 비어있지 않고 전부 NaN 아님
+  5) 수집 리포트에 뒤처진(stale) 종목이 없음 — 01_collect의 폴백이 조용히 흘러가는 것을 막는다
 
 실행:  .venv/bin/python scripts/data_pipeline/04_verify.py
 """
 from __future__ import annotations
+
+import json
 
 import pandas as pd
 
@@ -16,12 +19,33 @@ import qlib
 from qlib.config import REG_US
 from qlib.data import D
 
-from _common import QLIB_DIR, log, read_universe
+from _common import COLLECT_REPORT, QLIB_DIR, log, read_universe, stale_symbols
 
 FIELDS = ["$open", "$high", "$low", "$close", "$vwap", "$volume", "$factor"]
 
 
+def check_freshness() -> None:
+    """게이트 (5). qlib에 의존하지 않으므로 init 전에 돌린다.
+
+    (2)(3)(4)는 stale을 못 잡는다 — (2)는 전역 달력의 마지막 날짜만, (3)은 개수만,
+    (4)는 종목 하나만 본다. 한 종목이라도 최신이면 전부 통과한다.
+    """
+    if not COLLECT_REPORT.exists():
+        log(f"   ⚠️ (5) 수집 리포트 없음({COLLECT_REPORT.name}) — 01_collect 재실행 전까지 신선도 미검증")
+        return
+    report = json.loads(COLLECT_REPORT.read_text())
+    stale = stale_symbols(report)
+    if stale:
+        detail = ", ".join(f"{s}({lag}일)" for s, lag in stale[:10])
+        more = f" 외 {len(stale) - 10}종목" if len(stale) > 10 else ""
+        raise SystemExit(
+            f"[실패] (5) 뒤처진 종목 {len(stale)}개: {detail}{more}\n"
+            "  01_collect의 폴백으로 옛 데이터가 남아 있다. 재수집하거나 유니버스에서 제외할 것.")
+    log(f"✅ (5) 신선도: 전 종목이 기준일 대비 임계 내 ({len(report.get('symbols', {}))}종목)")
+
+
 def main() -> None:
+    check_freshness()
     if not (QLIB_DIR / "calendars").exists():
         raise SystemExit(f"[오류] qlib 데이터 없음: {QLIB_DIR} (먼저 03_dump_bin.py 실행)")
 
