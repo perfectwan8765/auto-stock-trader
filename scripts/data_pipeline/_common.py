@@ -53,7 +53,7 @@ CANDIDATES_CSV = ROOT / "universe" / "microcap_candidates.csv"
 TOSS_META_CSV = ROOT / "data" / "toss_stock_meta.csv"
 
 COLLECT_REPORT = DATA_RAW / "_collect_report.json"   # 01_collect 산출, 04_verify 게이트 입력
-STALE_MAX_LAG_DAYS = 10       # 이 일수를 넘게 뒤처진 종목이 있으면 검증 실패
+STALE_MAX_LAG_DAYS = 10       # 달력일 기준. 넘게 뒤처진 종목이 있으면 검증 실패
 
 
 def stale_symbols(report: dict, max_lag_days: int = STALE_MAX_LAG_DAYS) -> list[tuple[str, int]]:
@@ -98,9 +98,11 @@ def write_csv_atomic(df, path: Path, **to_csv_kw) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    os.close(fd)
     try:
-        df.to_csv(tmp, **to_csv_kw)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            df.to_csv(f, **to_csv_kw)
+            f.flush()
+            os.fsync(f.fileno())   # 교체 전에 디스크에 닿아야 크래시에도 잘린 파일이 안 남는다
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)

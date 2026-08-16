@@ -27,7 +27,6 @@ from pathlib import Path
 
 warnings.filterwarnings("ignore")
 import pandas as pd
-import yfinance as yf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV, EVENTS_MCAP_CSV, write_csv_atomic

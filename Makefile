@@ -46,16 +46,34 @@ DAG_NODES := \
   data/events_addv.csv \
   data/events_spread.csv
 
+# `make -n <node>`로는 확인이 안 된다 — 규칙이 없어도 파일이 이미 있으면 "Nothing to be
+# done"과 함께 exit 0이다. DAG_NODES는 전부 gitignore된 데이터 파일이라 파이프라인을 한 번
+# 돌린 머신에서는 무조건 통과하고, 정작 신규 클론에서만 실패하는 정반대 동작이 된다.
+# 규칙 데이터베이스(`make -p`)를 직접 조회한다.
 check-dag:
-	@fail=0; for n in $(DAG_NODES); do \
-	  $(MAKE) -n "$$n" >/dev/null 2>&1 || { echo "규칙 없음: $$n"; fail=1; }; \
+	@db=$$($(MAKE) -p -n -f $(firstword $(MAKEFILE_LIST)) 2>/dev/null); fail=0; \
+	for n in $(DAG_NODES) $(STAMPS); do \
+	  echo "$$db" | grep -qE "^$$n( |:)" || { echo "규칙 없음: $$n"; fail=1; }; \
 	done; \
-	if [ $$fail -eq 0 ]; then echo "✅ 선언된 노드 $(words $(DAG_NODES))개 모두 규칙 있음"; fi; \
+	if [ $$fail -eq 0 ]; then echo "✅ 노드 $(words $(DAG_NODES))개 + stamp $(words $(STAMPS))개 규칙 확인"; fi; \
 	exit $$fail
 
-data/insider_events.csv universe/microcap_candidates.txt universe/microcap_candidates.csv: \
-		$(DP)/gen_microcap_candidates.py
+# 이 머신의 GNU Make는 3.81이라 grouped target(`&:`)이 없다. 다중 타깃을 그냥 나열하면
+# 각 타깃이 같은 레시피를 가진 독립 규칙으로 취급돼, 둘 다 낡았을 때 스크립트가 두 번 돈다
+# — gen_microcap_candidates는 SEC DERA 전량 다운로드 + 340만 행 파싱이라 두 배는 비싸다.
+# stamp 파일 하나를 실제 산출물들의 선행으로 두어 한 번만 돌게 한다.
+STAMPS := .make/candidates.stamp .make/mcap.stamp
+
+.make:
+	@mkdir -p $@
+
+.make/candidates.stamp: $(DP)/gen_microcap_candidates.py | .make
 	$(PY) $<
+	@touch $@
+
+data/insider_events.csv universe/microcap_candidates.txt universe/microcap_candidates.csv: \
+		.make/candidates.stamp
+	@test -f $@ || { echo "[오류] $@ 가 생성되지 않았다"; exit 1; }
 
 # 교차 디렉터리 의존 — toss_probe가 만드는 노드다. data_pipeline만 봐서는 알 수 없다.
 data/toss_stock_meta.csv: universe/microcap_candidates.txt $(TP)/06_microcap_coverage.py
@@ -71,10 +89,13 @@ data/candidate_closes.csv: universe/microcap_candidates.txt $(DP)/fetch_candidat
 data/shares_outstanding.csv: universe/microcap_candidates.csv $(DP)/fetch_shares_outstanding.py
 	$(PY) $(DP)/fetch_shares_outstanding.py
 
-data/insider_events_mcap.csv universe/microcap_by_mcap.txt: \
-		data/insider_events.csv data/candidate_closes.csv data/shares_outstanding.csv \
-		$(DP)/gen_universe_by_mcap.py
+.make/mcap.stamp: data/insider_events.csv data/candidate_closes.csv \
+		data/shares_outstanding.csv $(DP)/gen_universe_by_mcap.py | .make
 	$(PY) $(DP)/gen_universe_by_mcap.py
+	@touch $@
+
+data/insider_events_mcap.csv universe/microcap_by_mcap.txt: .make/mcap.stamp
+	@test -f $@ || { echo "[오류] $@ 가 생성되지 않았다"; exit 1; }
 
 data/events_addv.csv: data/insider_events_mcap.csv universe/microcap_tradable.txt \
 		$(DP)/measure_addv.py

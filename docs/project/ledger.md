@@ -3,7 +3,7 @@
 실주문이 시작되면(토스 연동, Phase 0) 주문·체결·포지션은 재생성이 불가능한 사실 데이터가 된다.
 이 문서는 그 사실을 담을 SQLite 원장의 설계를 정한다. **설계 확정 문서이며 구현은 Phase 0에서 한다.**
 
-전체 계획은 [qlib-toss.md](qlib-toss.md), 구조는 [README.md](README.md) §디렉토리 참고.
+전체 계획은 [roadmap.md](roadmap.md), 구조는 [README.md](../../README.md) §디렉토리 참고.
 
 ## 왜 파일 기반 SQLite인가
 

@@ -41,40 +41,12 @@ def _broker(responses=None, post_error=None):
 
 # --- get_holdings (실측: result.items[], quantity 문자열) ---
 
-def test_holdings_parse_result_items():
-    b = _broker({"/api/v1/holdings": {"result": {"items": [
-        {"symbol": "AAPL", "quantity": "9.941577"},
-        {"symbol": "TSLA", "quantity": "1"}]}}})
-    assert b.get_holdings() == {"AAPL": 9.941577, "TSLA": 1.0}
 
 
-def test_holdings_empty_items_ok():
-    b = _broker({"/api/v1/holdings": {"result": {"items": []}}})
-    assert b.get_holdings() == {}          # 보유 없음(정상) → 빈 dict
-    b2 = _broker({"/api/v1/holdings": {"result": {}}})
-    assert b2.get_holdings() == {}         # items 키 없음 → 빈 dict
 
 
-def test_holdings_missing_field_raises_not_skip():
-    """홀딩 항목 누락은 스킵 금지(화이트리스트 X 미완성=bypass) → 중단."""
-    b = _broker({"/api/v1/holdings": {"result": {"items": [{"symbol": "AAPL"}]}}})
-    with pytest.raises(TossError):
-        b.get_holdings()
 
 
-def test_holdings_bad_quantity_raises():
-    b = _broker({"/api/v1/holdings": {"result": {"items": [{"symbol": "AAPL", "quantity": "N/A"}]}}})
-    with pytest.raises(TossError):
-        b.get_holdings()
-
-
-def test_holdings_unexpected_shape_raises():
-    b = _broker({"/api/v1/holdings": {"result": {"items": "not-a-list"}}})
-    with pytest.raises(TossError):
-        b.get_holdings()
-    b2 = _broker({"/api/v1/holdings": []})   # result 래퍼 없음, dict 아님
-    with pytest.raises(TossError):
-        b2.get_holdings()
 
 
 # --- get_prices (실측: result[], lastPrice 문자열) ---
@@ -151,17 +123,8 @@ def _holdings_pnl():
         {"symbol": "NKE", "quantity": "1", "dailyProfitLoss": {"amount": "1.49"}}]}}}
 
 
-def test_daily_pnl_sums_only_managed():
-    b = _broker(_holdings_pnl())
-    assert b.get_daily_pnl_usd({"AAPL"}) == -13.49          # 관리셋 밖(TSM/NKE) 제외
-    assert round(b.get_daily_pnl_usd({"AAPL", "TSM"}), 2) == 47.79
-    assert b.get_daily_pnl_usd(set()) == 0.0                # 관리셋 비면 0
 
 
-def test_daily_pnl_missing_amount_skipped():
-    b = _broker({"/api/v1/holdings": {"result": {"items": [
-        {"symbol": "AAPL", "quantity": "1"}]}}})           # dailyProfitLoss 없음
-    assert b.get_daily_pnl_usd({"AAPL"}) == 0.0
 
 
 # --- is_market_open (실측: isOpen 없음 → regularMarket 시각 비교) ---
@@ -230,14 +193,19 @@ def test_place_returns_order_id():
     assert b.place(OrderIntent("AAPL", "BUY", "amount", 35.0, "rb-abc", "enter")) == "ord-1"
 
 
-def test_place_without_order_id_is_an_error():
-    # orderId가 없으면 체결 추적이 불가능하다 — 성공으로 넘기면 안 된다.
+def test_place_without_order_id_returns_empty_not_raise():
+    """POST가 성공했는데 orderId가 없으면 **예외를 던지지 않는다.**
+
+    주문은 이미 브로커에 살아 있다. 여기서 던지면 러너가 placed에 담지 못해 화이트리스트에
+    안 들어가고, 그 종목은 청산도 trim도 안 되면서 목표에 남아 다음 사이클에 또 매수된다.
+    추적 불가는 빈 문자열로 알리고, 발주 사실은 반드시 기록되게 한다.
+    """
     class NoIdClient(StubClient):
         def post(self, path, json_body=None):
             return {"result": {"clientOrderId": "x"}}
 
-    with pytest.raises(TossError, match="orderId 없음"):
-        TossBroker(NoIdClient()).place(OrderIntent("AAPL", "BUY", "amount", 1.0, "c", "enter"))
+    assert TossBroker(NoIdClient()).place(
+        OrderIntent("AAPL", "BUY", "amount", 1.0, "c", "enter")) == ""
 
 
 @pytest.mark.parametrize("code,expected", [
@@ -268,7 +236,9 @@ def test_get_fill_parses_execution_fields():
         "filledQuantity": "1", "averageFilledPrice": "101.5", "filledAmount": "101.5",
         "commission": "0.1", "tax": "0", "filledAt": "2026-07-20T22:31:00.000+09:00"}}}})
     fill = b.get_fill("ord-1")
-    assert fill.avg_filled_price == "101.5" and fill.commission == "0.1"
+    # 토스는 숫자를 문자열로 준다. 그대로 흘리면 슬리피지 계산이 TypeError로 죽는다.
+    assert fill.avg_filled_price == 101.5 and fill.commission == 0.1
+    assert isinstance(fill.filled_quantity, float)
     assert fill.filled_at.startswith("2026-07-20")
 
 
@@ -327,3 +297,90 @@ def test_get_sellable_retries_rate_limited(monkeypatch):
             return {"result": {"sellableQuantity": "2.5"}}
 
     assert TossBroker(Flaky()).get_sellable(["AAA"]) == {"AAA": 2.5}
+
+
+def test_get_fill_keeps_absent_fields_none():
+    b = _broker({"/api/v1/orders/ord-1": {"result": {"execution": {
+        "filledQuantity": "1", "averageFilledPrice": "101.5"}}}})
+    fill = b.get_fill("ord-1")
+    assert fill.commission is None and fill.tax is None
+
+
+def test_reads_retry_rate_limit_then_succeed(monkeypatch):
+    """읽기 경로 전체가 번역·재시도를 지난다 — 하나라도 빠지면 raw TossApiError가 러너를 뚫는다."""
+    monkeypatch.setattr("toss.broker.time.sleep", lambda s: None)
+    n = {"i": 0}
+
+    class Flaky(StubClient):
+        def get(self, path, **kw):
+            n["i"] += 1
+            if n["i"] == 1:
+                raise TossApiError("GET", path, 429, {"error": {"code": "rate-limit-exceeded"}})
+            return {"result": {"cashBuyingPower": "500.0"}}
+
+    assert TossBroker(Flaky()).get_buying_power_usd() == 500.0
+
+
+def test_read_error_is_normalized_not_raw(monkeypatch):
+    monkeypatch.setattr("toss.broker.time.sleep", lambda s: None)
+
+    class Closed(StubClient):
+        def get(self, path, **kw):
+            raise TossApiError("GET", path, 422, {"error": {"code": "order-hours-closed"}})
+
+    with pytest.raises(BrokerMarketClosed):
+        TossBroker(Closed()).get_buying_power_usd()
+
+
+def test_snapshot_paces_account_calls(monkeypatch):
+    slept = []
+    monkeypatch.setattr("toss.broker.time.sleep", lambda s: slept.append(s))
+    b = _broker({
+        "/api/v1/holdings": {"result": {"items": []}},
+        "/api/v1/prices": [],
+        "/api/v1/buying-power": {"result": {"cashBuyingPower": "0"}},
+    })
+    b.snapshot(["AAPL"])
+    assert len(slept) >= 2          # holdings → prices → buying-power 사이
+
+
+# --- 보유·당일손익은 snapshot을 통해서만 프로덕션 경로에 닿는다 ---
+
+def test_snapshot_empty_items_is_ok():
+    # 빈 계좌는 정상이다 — 파싱 실패와 구분해야 한다.
+    b = _broker({"/api/v1/holdings": {"result": {"items": []}},
+                 "/api/v1/prices": [], "/api/v1/buying-power": {"result": {"cashBuyingPower": "0"}}})
+    snap = b.snapshot([])
+    assert snap.holdings == {} and snap.daily_pnl == {}
+
+
+def test_snapshot_parses_holdings_and_daily_pnl():
+    b = _broker({
+        "/api/v1/holdings": {"result": {"items": [
+            {"symbol": "AAPL", "quantity": "9.941577", "dailyProfitLoss": {"amount": "-13.49"}},
+            {"symbol": "TSM", "quantity": "2", "dailyProfitLoss": {"amount": "61.28"}},
+            {"symbol": "NKE", "quantity": "1"},                  # 손익 필드 없음 → 생략
+        ]}},
+        "/api/v1/prices": [{"symbol": "AAPL", "lastPrice": "100"}],
+        "/api/v1/buying-power": {"result": {"cashBuyingPower": "10"}},
+    })
+    snap = b.snapshot([])
+    assert snap.holdings == {"AAPL": 9.941577, "TSM": 2.0, "NKE": 1.0}
+    assert snap.daily_pnl == {"AAPL": -13.49, "TSM": 61.28}      # NKE는 키 자체가 없다
+
+
+def test_snapshot_raises_on_unexpected_holdings_shape():
+    """부분 반환 금지 — 화이트리스트 제외셋이 미완성되면 사용자 보유가 매매 대상이 된다."""
+    with pytest.raises(TossError):
+        _broker({"/api/v1/holdings": {"result": []}}).snapshot([])
+
+
+def test_snapshot_raises_on_missing_item_field():
+    with pytest.raises(TossError, match="symbol/quantity"):
+        _broker({"/api/v1/holdings": {"result": {"items": [{"symbol": "AAPL"}]}}}).snapshot([])
+
+
+def test_snapshot_raises_on_unparsable_quantity():
+    with pytest.raises(TossError, match="숫자 변환 실패"):
+        _broker({"/api/v1/holdings": {"result": {"items": [
+            {"symbol": "AAPL", "quantity": "N/A"}]}}}).snapshot([])

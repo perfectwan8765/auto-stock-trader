@@ -13,16 +13,14 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from _common import ROOT, STALE_MAX_LAG_DAYS
-
-TOSS_META = ROOT / "data" / "toss_stock_meta.csv"
+from _common import STALE_MAX_LAG_DAYS, TOSS_META_CSV
 
 # 워커 스폰이 환경에 따라 멈춘다. 이 규모(수백 종목)에서는 단일 커널이 23배 빠르기도 하다
 # — 533종목 실측 6.9s(기본) vs 0.3s(kernels=1).
 _QLIB_KERNELS = 1
 
 
-def delisted_symbols(meta_path: Path = TOSS_META) -> set[str]:
+def delisted_symbols(meta_path: Path = TOSS_META_CSV) -> set[str]:
     """`delistDate`가 있거나 status가 ACTIVE가 아닌 심볼. 메타가 없으면 빈 집합."""
     if not meta_path.exists():
         return set()
@@ -39,11 +37,18 @@ def delisted_symbols(meta_path: Path = TOSS_META) -> set[str]:
     return out
 
 
+SCAN_WINDOW_DAYS = 730   # 조회 창. 좁으면 가장 심하게 뒤처진 종목이 창 밖으로 빠져 면제된다
+
+
 def lag_by_symbol(qlib_dir: Path) -> dict[str, int]:
-    """번들의 종목별 '마지막 유효 종가'가 표본 내 최신일 대비 며칠 뒤처졌는지.
+    """번들의 종목별 '마지막 유효 종가'가 표본 내 최신일 대비 며칠(달력일) 뒤처졌는지.
 
     기준은 '오늘'이 아니라 표본 내 최신일이다 — 휴장·오래된 스냅샷에서 전 종목이 동시에
     stale로 뜨는 것을 막고, 잡으려는 건 "남들은 최신인데 혼자 뒤처진 종목"이다.
+
+    창(`SCAN_WINDOW_DAYS`) 안에 유효 종가가 하나도 없는 종목은 **가장 심하게 뒤처진 경우**다.
+    조회 결과에서 통째로 빠지므로 명시적으로 창 크기를 지연값으로 준다 — 그러지 않으면
+    게이트가 잡으려던 대상이 정확히 면제된다.
     """
     import pandas as pd
     import qlib
@@ -58,12 +63,15 @@ def lag_by_symbol(qlib_dir: Path) -> dict[str, int]:
     insts = D.list_instruments(D.instruments("all"), as_list=True)
     if not insts:
         return {}
-    start = (newest - pd.Timedelta(days=120)).strftime("%Y-%m-%d")
+    start = (newest - pd.Timedelta(days=SCAN_WINDOW_DAYS)).strftime("%Y-%m-%d")
     df = D.features(insts, ["$close"], start_time=start)
     if df is None or df.empty:
-        return {}
+        return {s: SCAN_WINDOW_DAYS for s in map(str, insts)}
     last = df["$close"].dropna().groupby(level=0).apply(lambda s: s.index[-1][1])
-    return {str(sym): int((newest - d).days) for sym, d in last.items()}
+    out = {str(sym): int((newest - d).days) for sym, d in last.items()}
+    for s in map(str, insts):
+        out.setdefault(s, SCAN_WINDOW_DAYS)   # 창 밖 = 최소 이만큼 뒤처졌다
+    return out
 
 
 def stale_in_bundle(qlib_dir: Path, max_lag_days: int = STALE_MAX_LAG_DAYS,

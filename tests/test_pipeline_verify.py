@@ -63,3 +63,27 @@ def test_delisted_lookup_reads_meta(tmp_path):
 def test_missing_meta_excludes_nothing(tmp_path):
     # 메타가 없는 환경(S&P500 전용)에서는 전량 판정한다 — 대형주는 폐지가 드물다.
     assert verify.delisted_symbols(tmp_path / "absent.csv") == set()
+
+
+def test_symbols_outside_scan_window_are_not_exempt(monkeypatch):
+    """창 밖으로 빠진 종목이 가장 심하게 뒤처진 경우다 — 면제되면 게이트가 무의미해진다."""
+    class FakeD:
+        @staticmethod
+        def calendar(freq): return [__import__("pandas").Timestamp("2026-08-14")]
+        @staticmethod
+        def instruments(x): return x
+        @staticmethod
+        def list_instruments(x, as_list): return ["FRESH", "ANCIENT"]
+        @staticmethod
+        def features(insts, fields, start_time):
+            import pandas as pd
+            idx = pd.MultiIndex.from_tuples([("FRESH", pd.Timestamp("2026-08-14"))])
+            return pd.DataFrame({"$close": [1.0]}, index=idx)   # ANCIENT는 창 밖이라 없음
+
+    monkeypatch.setitem(sys.modules, "qlib", type("m", (), {"init": staticmethod(lambda **k: None)}))
+    monkeypatch.setitem(sys.modules, "qlib.config", type("m", (), {"REG_US": "us"}))
+    monkeypatch.setitem(sys.modules, "qlib.data", type("m", (), {"D": FakeD}))
+
+    lags = verify.lag_by_symbol(Path("x"))
+    assert lags["FRESH"] == 0
+    assert lags["ANCIENT"] == verify.SCAN_WINDOW_DAYS       # 누락이 아니라 최대 지연

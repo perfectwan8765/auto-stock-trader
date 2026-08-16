@@ -213,7 +213,7 @@ Phase 3(대형주)의 *"병목은 비용이 아니라 신호품질"* 이 다른 
 
 - 사전등록·이탈 2건(D-1·D-2)·정정 3건(A-1~A-3) 전체 이력: [`microcap-insider-prereg.md`](docs/project/microcap-insider-prereg.md)
 - 코드: `scripts/data_pipeline/`(수집·측정 9종) · `scripts/event_study/`(BHAR·BMP/KP·calendar-time)
-- 작업계획서는 `docs/`(git 미추적)에 있다
+- 문서는 `docs/` 하위 카테고리 폴더에 있다 — `project/`·`research/`는 추적하고, `findings/`(계좌 고유값)·`tooling/`은 로컬 전용이다
 
 > Phase 3 결론: 베이스라인(Alpha158+LightGBM, 주간, 미국 대형주)에서는 SPY 대비 exploitable 엣지가 검출되지 않았다. **Phase 0 실측 비용(수수료~0.10%·환전~0.03%/편도)을 반영해 재판정한 결과에도 결론은 동일** — 무비용 초과수익이 사실상 0이라 비용을 낮춰도 순초과수익은 음수(연 -5.6%). 병목은 비용이 아니라 신호품질이다. 현 단계 목적은 학습과 시스템 완성이다.
 

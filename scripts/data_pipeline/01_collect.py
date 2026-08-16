@@ -18,8 +18,6 @@ import json
 import time
 from datetime import datetime, timezone
 
-import pandas as pd
-
 from _common import write_csv_atomic, COLLECT_REPORT, DATA_RAW, START_DATE, log, read_universe
 from collect import download_one, last_date_of
 
@@ -64,7 +62,7 @@ def main() -> None:
         log(f"  실패(데이터 없음):    {', '.join(failed)}")
 
     # 폴백 사실을 파일로 남긴다 — 로그만으로는 하류(02·03·04)가 알 수 없다
-    COLLECT_REPORT.write_text(json.dumps(
+    write_text_atomic(COLLECT_REPORT, json.dumps(
         {"collected_at": datetime.now(timezone.utc).isoformat(), "symbols": report},
         indent=2, ensure_ascii=False))
     log(f"수집 리포트: {COLLECT_REPORT.name} ({len(report)}종목)")

@@ -60,6 +60,12 @@ def _num(value, field: str) -> float:
         raise TossError(f"[응답 파싱] {field} 숫자 변환 실패: {value!r}")
 
 
+def _opt_num(value, field: str) -> float | None:
+    """있으면 float, 없으면 None. 토스는 숫자를 문자열로 주는데 그대로 흘리면
+    슬리피지(체결가 − 결정가) 계산이 TypeError로 죽는다."""
+    return None if value is None else _num(value, field)
+
+
 def _regular_market_open(resp, now: datetime) -> bool:
     """market-calendar 응답의 오늘 정규장 구간 [start, end) 안이면 True.
 
@@ -81,29 +87,29 @@ def _regular_market_open(resp, now: datetime) -> bool:
 
 
 class TossBroker:
-    def __init__(self, client: TossClient, sellable_sleep_s: float = 1.0,
-                 sellable_retries: int = 3, sellable_backoff_s: float = 2.0):
+    def __init__(self, client: TossClient, read_sleep_s: float = 1.0,
+                 read_retries: int = 3, read_backoff_s: float = 2.0):
         self.client = client
-        self.sellable_sleep_s = sellable_sleep_s
-        self.sellable_retries = sellable_retries
-        self.sellable_backoff_s = sellable_backoff_s
+        self.read_sleep_s = read_sleep_s      # ACCOUNT 그룹 1 TPS — 읽기 사이 간격
+        self.read_retries = read_retries
+        self.read_backoff_s = read_backoff_s
 
-    def get_holdings(self) -> dict[str, float]:
-        """symbol -> 보유 주식수. 화이트리스트 X 동결의 근거이므로 부분 반환 금지:
-        모양이 예상과 다르거나 항목 필드가 누락/파싱불가면 TossError로 중단한다."""
-        result = _result(self.client.get("/api/v1/holdings"))
-        if not isinstance(result, dict):
-            raise TossError(f"[응답 파싱] holdings 예상 밖 형태: {type(result).__name__}")
-        items = result.get("items", [])
-        if not isinstance(items, list):
-            raise TossError("[응답 파싱] holdings.items가 리스트가 아님")
-        out: dict[str, float] = {}
-        for it in items:  # result.items[]: symbol, quantity(str)
-            sym, qty = it.get("symbol"), it.get("quantity")
-            if sym is None or qty is None:
-                raise TossError(f"[응답 파싱] holdings 항목에 symbol/quantity 누락: {it}")
-            out[str(sym)] = _num(qty, "holdings.quantity")
-        return out
+    def _get(self, path: str, **kw):
+        """모든 읽기가 지나는 경로. 에러코드를 번역하고 속도제한은 백오프 재시도한다.
+
+        읽기 하나하나에 번역이 빠지면 raw TossApiError가 러너를 뚫어, 어댑터에 백오프가
+        있는데도 리밸 전체가 주문 한 건 없이 죽는다.
+        """
+        for attempt in range(self.read_retries + 1):
+            try:
+                return self.client.get(path, **kw)
+            except TossApiError as exc:
+                err = _normalized(exc)
+                if isinstance(err, BrokerRateLimited) and attempt < self.read_retries:
+                    time.sleep(self.read_backoff_s * (attempt + 1))
+                    continue
+                raise err from exc
+        raise AssertionError("unreachable")
 
     def get_holdings_raw(self) -> list[dict]:
         """holdings 응답 항목을 파싱 없이 그대로 반환.
@@ -116,7 +122,7 @@ class TossBroker:
         Raises:
             TossError: 응답 형태가 예상과 다를 때.
         """
-        result = _result(self.client.get("/api/v1/holdings"))
+        result = _result(self._get("/api/v1/holdings"))
         if not isinstance(result, dict):
             raise TossError(f"[응답 파싱] holdings 예상 밖 형태: {type(result).__name__}")
         items = result.get("items", [])
@@ -143,10 +149,16 @@ class TossBroker:
                 daily_pnl[str(sym)] = _num(amount, "holdings.dailyProfitLoss.amount")
 
         symbols = sorted(set(target_symbols) | set(holdings))
+        self._pause()
         prices = self.get_prices(symbols) if symbols else {}
+        self._pause()
         return AccountSnapshot(holdings=holdings, prices=prices,
                                buying_power_usd=self.get_buying_power_usd(),
                                daily_pnl=daily_pnl)
+
+    def _pause(self) -> None:
+        if self.read_sleep_s > 0:
+            time.sleep(self.read_sleep_s)
 
     def get_sellable(self, symbols: list[str]) -> dict[str, float]:
         """심볼별 매도가능수량. 호출 사이에 간격을 두고 속도제한은 재시도한다.
@@ -156,23 +168,13 @@ class TossBroker:
         """
         out: dict[str, float] = {}
         for n, sym in enumerate(symbols):
-            if n and self.sellable_sleep_s > 0:
-                time.sleep(self.sellable_sleep_s)
-            out[sym] = self._sellable_one(sym)
+            if n and self.read_sleep_s > 0:
+                time.sleep(self.read_sleep_s)
+            out[sym] = self.get_sellable_quantity(sym)
         return out
 
-    def _sellable_one(self, symbol: str) -> float:
-        for attempt in range(self.sellable_retries + 1):
-            try:
-                return self.get_sellable_quantity(symbol)
-            except BrokerRateLimited:
-                if attempt == self.sellable_retries:
-                    raise
-                time.sleep(self.sellable_backoff_s * (attempt + 1))
-        return 0.0
-
     def get_prices(self, symbols: list[str]) -> dict[str, float]:
-        resp = self.client.get("/api/v1/prices", params={"symbols": ",".join(symbols)})
+        resp = self._get("/api/v1/prices", params={"symbols": ",".join(symbols)})
         items = _result(resp)
         if not isinstance(items, list):
             raise TossError(f"[응답 파싱] prices 예상 밖 형태: {type(items).__name__}")
@@ -197,7 +199,7 @@ class TossBroker:
         Raises:
             TossError: 응답이 리스트가 아닐 때.
         """
-        items = _result(self.client.get("/api/v1/prices", params={"symbols": ",".join(symbols)}))
+        items = _result(self._get("/api/v1/prices", params={"symbols": ",".join(symbols)}))
         if not isinstance(items, list):
             raise TossError(f"[응답 파싱] prices 예상 밖 형태: {type(items).__name__}")
         return items
@@ -215,14 +217,14 @@ class TossBroker:
         Raises:
             TossError: 응답이 리스트가 아닐 때.
         """
-        items = _result(self.client.get("/api/v1/stocks", params={"symbols": ",".join(symbols)}))
+        items = _result(self._get("/api/v1/stocks", params={"symbols": ",".join(symbols)}))
         if not isinstance(items, list):
             raise TossError(f"[응답 파싱] stocks 예상 밖 형태: {type(items).__name__}")
         return {str(it["symbol"]): it for it in items if it.get("symbol") is not None}
 
     def get_buying_power_usd(self) -> float:
         # currency 쿼리파람 필수(없으면 400). USD 가용 현금 = result.cashBuyingPower.
-        resp = self.client.get("/api/v1/buying-power", params={"currency": "USD"})
+        resp = self._get("/api/v1/buying-power", params={"currency": "USD"})
         result = _result(resp)
         if not isinstance(result, dict) or result.get("cashBuyingPower") is None:
             return 0.0  # 알 수 없으면 보수적 0 (매수 안 함)
@@ -231,31 +233,13 @@ class TossBroker:
     def get_sellable_quantity(self, symbol: str) -> float:
         # T+N 미결제분을 제외한 실제 매도가능수량. 보유수량과 다를 수 있어 매도 상한으로 쓴다.
         try:
-            resp = self.client.get("/api/v1/sellable-quantity", params={"symbol": symbol})
+            resp = self._get("/api/v1/sellable-quantity", params={"symbol": symbol})
         except TossApiError as exc:
             raise _normalized(exc) from exc
         result = _result(resp)
         if not isinstance(result, dict) or result.get("sellableQuantity") is None:
             return 0.0  # 알 수 없으면 보수적 0 (매도 안 함)
         return _num(result["sellableQuantity"], "sellable-quantity.sellableQuantity")
-
-    def get_daily_pnl_usd(self, symbols: set[str]) -> float:
-        """holdings 응답의 종목별 당일손익(dailyProfitLoss.amount) 합. 음수=손실.
-        symbols(봇 관리셋 M)에 속한 항목만 합산 → 사용자 수동 보유(X)는 손실상한에서 제외."""
-        result = _result(self.client.get("/api/v1/holdings"))
-        if not isinstance(result, dict):
-            raise TossError(f"[응답 파싱] holdings 예상 밖 형태: {type(result).__name__}")
-        items = result.get("items", [])
-        if not isinstance(items, list):
-            raise TossError("[응답 파싱] holdings.items가 리스트가 아님")
-        total = 0.0
-        for it in items:
-            if it.get("symbol") not in symbols:
-                continue
-            amount = (it.get("dailyProfitLoss") or {}).get("amount")
-            if amount is not None:
-                total += _num(amount, "holdings.dailyProfitLoss.amount")
-        return total
 
     def get_order(self, order_id: str) -> dict:
         """주문 단건 조회. 체결가(`execution.averageFilledPrice`)의 유일한 출처다.
@@ -268,13 +252,13 @@ class TossBroker:
         Raises:
             TossError: 응답이 dict가 아닐 때.
         """
-        result = _result(self.client.get(f"/api/v1/orders/{order_id}"))
+        result = _result(self._get(f"/api/v1/orders/{order_id}"))
         if not isinstance(result, dict):
             raise TossError(f"[응답 파싱] orders/{{id}} 예상 밖 형태: {type(result).__name__}")
         return result
 
     def is_market_open(self) -> bool:
-        resp = self.client.get("/api/v1/market-calendar/US", need_account=False)
+        resp = self._get("/api/v1/market-calendar/US", need_account=False)
         return _regular_market_open(resp, datetime.now(timezone.utc))
 
     def place(self, intent: OrderIntent) -> dict:
@@ -293,10 +277,12 @@ class TossBroker:
             resp = self.client.post("/api/v1/orders", json_body=body)
         except TossApiError as exc:
             raise _normalized(exc) from exc
+        # POST가 이미 성공했다 — 주문은 브로커에 살아 있다. 여기서 예외를 던지면 러너가
+        # placed에 담지 못해 화이트리스트에도 안 들어가고, 그 종목은 청산도 trim도 안 되면서
+        # 다음 사이클에 다시 매수된다. 추적 불가는 빈 문자열로 알리고 기록은 남긴다.
         result = _result(resp)
-        if not isinstance(result, dict) or not result.get("orderId"):
-            raise TossError(f"[응답 파싱] 주문 응답에 orderId 없음: {result!r}")
-        return str(result["orderId"])
+        order_id = result.get("orderId") if isinstance(result, dict) else None
+        return str(order_id) if order_id else ""
 
     def get_fill(self, order_id: str) -> Fill | None:
         """체결 실측. 미체결이면 None.
@@ -312,10 +298,10 @@ class TossBroker:
         if not ex:
             return None
         return Fill(
-            filled_quantity=ex.get("filledQuantity"),
-            avg_filled_price=ex.get("averageFilledPrice"),
-            filled_amount=ex.get("filledAmount"),
-            commission=ex.get("commission"),
-            tax=ex.get("tax"),
+            filled_quantity=_opt_num(ex.get("filledQuantity"), "execution.filledQuantity"),
+            avg_filled_price=_opt_num(ex.get("averageFilledPrice"), "execution.averageFilledPrice"),
+            filled_amount=_opt_num(ex.get("filledAmount"), "execution.filledAmount"),
+            commission=_opt_num(ex.get("commission"), "execution.commission"),
+            tax=_opt_num(ex.get("tax"), "execution.tax"),
             filled_at=ex.get("filledAt"),
         )

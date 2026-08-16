@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from execution.errors import CircuitBreakerTripped, KillSwitchActive
+from execution.errors import CircuitBreakerTripped, ExecutionError, KillSwitchActive
 from conftest import _as_broker_error
 from execution.interface import AccountSnapshot, Fill, OrderIntent
 from execution.managed import ManagedState
@@ -377,3 +377,31 @@ def test_snapshot_is_fetched_once_per_run():
 
     _runner(Spy(buying_power=700.0)).run(TW, "20260716", dry_run=False)
     assert len(calls) == 1
+
+
+# --- 리뷰 조치: 배치 조회·추적 불가 주문 ---
+
+def test_unreported_sellable_symbol_aborts():
+    """조회 안 된 심볼을 0으로 보면 매도가 '미결제'로 둔갑해 조용히 사라진다."""
+    class Partial(MockBroker):
+        def get_sellable(self, symbols):
+            return {}                       # 요청은 받았지만 아무것도 안 돌려줌
+
+    broker = Partial(holdings={"NVDA": 3.0}, buying_power=0.0)
+    state = ManagedState(managed={"NVDA"}, bootstrapped=True)
+    with pytest.raises(ExecutionError, match="매도가능수량 미조회"):
+        _runner(broker, managed_state=state).run({"AAPL": 1.0}, "20260716", dry_run=True)
+
+
+def test_order_without_id_is_still_recorded():
+    """주문 ID를 못 받아도 발주 사실은 남는다 — 없으면 나중에 조회할 실마리가 없다."""
+    class NoId(MockBroker):
+        def place(self, intent):
+            self.placed.append(intent)
+            return ""
+
+    broker = NoId(prices={"AAPL": 100.0}, buying_power=700.0)
+    res = _runner(broker).run({"AAPL": 1.0}, "20260718", dry_run=False)
+    assert res.placed and len(res.fills) == 1
+    assert res.fills[0]["fetch_error"] == "no_order_id"
+    assert res.fills[0]["client_order_id"] == res.placed[0]

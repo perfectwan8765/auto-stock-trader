@@ -125,12 +125,19 @@ class RebalanceRunner:
         sell_symbols = sorted({o.symbol for o in plan.orders
                                if o.side == "SELL" and o.kind == "quantity"})
         sellable_map = self.broker.get_sellable(sell_symbols) if sell_symbols else {}
+        # 누락을 0으로 보면 "조회를 안 한 것"이 "미결제"로 기록되고 매도가 조용히 사라진다.
+        # 청산하려던 포지션을 계속 들고 있게 되므로 중단이 낫다.
+        unreported = [s for s in sell_symbols if s not in sellable_map]
+        if unreported:
+            raise ExecutionError(
+                f"매도가능수량 미조회 종목 → 매도 판단 불가(안전 중단): {unreported}"
+            )
 
         new_orders: list[OrderIntent] = []
         extra_skips: list[tuple[str, str]] = []
         for o in plan.orders:
             if o.side == "SELL" and o.kind == "quantity":
-                sellable = sellable_map.get(o.symbol, 0.0)
+                sellable = sellable_map[o.symbol]
                 if sellable <= 0:
                     extra_skips.append((o.symbol, "not_sellable_settlement"))
                     continue
@@ -176,6 +183,10 @@ class RebalanceRunner:
         for intent, order_id in order_ids:
             row = {"symbol": intent.symbol, "side": intent.side,
                    "client_order_id": intent.client_order_id, "order_id": order_id}
+            if not order_id:
+                row["fetch_error"] = "no_order_id"   # 발주는 됐으나 응답에 주문 ID가 없었다
+                out.append(row)
+                continue
             try:
                 fill = self.broker.get_fill(order_id)
             except Exception as exc:  # noqa: BLE001 — 조회 실패가 발주 기록을 날리면 안 된다
@@ -223,8 +234,9 @@ class RebalanceRunner:
                 outcome, code = self._place_order(order)
                 if outcome == "placed":
                     placed.append(order.client_order_id)
-                    if code:
-                        order_ids.append((order, code))
+                    # order_id가 빈 문자열이어도 담는다 — 발주는 됐는데 추적만 안 되는
+                    # 상태이므로, 기록을 빠뜨리면 나중에 조회할 실마리조차 없다.
+                    order_ids.append((order, code or ""))
                     if self.cb is not None:
                         self.cb.record_order()
                 elif outcome == "skip":

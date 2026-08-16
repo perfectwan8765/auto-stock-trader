@@ -27,14 +27,15 @@ from _common import CANDIDATE_CLOSES_CSV, CANDIDATES_TXT, write_csv_atomic  # no
 PRICES = CANDIDATE_CLOSES_CSV
 
 
-def fetch_closes(symbols: list[str], start: str, end: str) -> pd.DataFrame:
+def fetch_closes(symbols: list[str], start: str, end: str,
+                 use_cache: bool = True) -> pd.DataFrame:
     """종가 패널을 받아 캐시. 재수집 시 adjclose가 소급 변경되므로 캐시를 우선 재사용한다.
 
     캐시 유효성은 컬럼뿐 아니라 날짜 범위도 본다 — 컬럼만 보면 `--quarters` 확장 시
     캐시 끝 이후 이벤트가 전부 캐시 마지막 종가를 쓰게 되어 시총이 조용히 틀린다.
     """
     df = pd.DataFrame()
-    if PRICES.exists():
+    if use_cache and PRICES.exists():
         cached = pd.read_csv(PRICES, index_col=0, parse_dates=True)
         covers_range = (not cached.empty
                         and cached.index.min() <= pd.Timestamp(start)
@@ -94,14 +95,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", default="2015-01-01")
     ap.add_argument("--end", default=pd.Timestamp.today().strftime("%Y-%m-%d"))
-    ap.add_argument("--refresh", action="store_true", help="캐시 무시하고 전체 재수집")
+    ap.add_argument("--refresh", action="store_true", help="캐시를 읽지 않고 전체 재수집(기존 파일은 성공 시에만 교체)")
     args = ap.parse_args()
 
     symbols = read_candidates()
     print(f"후보 {len(symbols):,}종목 종가 수집 → {PRICES.relative_to(PRICES.parents[2])}")
-    if args.refresh and PRICES.exists():
-        PRICES.unlink()
-    df = fetch_closes(symbols, args.start, args.end)
+    # 삭제하지 않는다. 지운 뒤 전량 실패하면 "기존 캐시를 보존한다"는 가드가 이미 없어진
+    # 캐시를 지키겠다고 중단하는 꼴이 된다 — 26MB와 수 시간치가 날아간다.
+    # 읽지 않기만 하면 충분하다. 쓰기는 write_csv_atomic이 성공 시에만 교체한다.
+    df = fetch_closes(symbols, args.start, args.end, use_cache=not args.refresh)
     print(f"완료: {df.shape[0]:,}행 × {df.shape[1]:,}종목")
 
 

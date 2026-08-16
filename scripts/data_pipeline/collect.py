@@ -27,14 +27,6 @@ _RENAME = {
 _COLS = ["date", "open", "high", "low", "close", "adjclose", "volume", "symbol"]
 
 
-def _last_date_of(path) -> str | None:
-    """폴백으로 유지된 CSV의 마지막 날짜 — stale 판정의 근거값."""
-    try:
-        return str(pd.read_csv(path, usecols=["date"])["date"].iloc[-1])[:10]
-    except (OSError, ValueError, KeyError, IndexError):
-        return None
-
-
 def download_one(symbol: str, start: str) -> pd.DataFrame | None:
     """한 종목 다운로드. 재시도+backoff. 성공 시 스키마 DataFrame, 실패 시 None."""
     for attempt in range(1, MAX_RETRIES + 1):

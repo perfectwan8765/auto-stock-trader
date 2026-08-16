@@ -63,7 +63,7 @@ def _gate_bundle_freshness() -> None:
         more = f" 외 {len(stale) - 10}종목" if len(stale) > 10 else ""
         raise SystemExit(
             f"[실패] (6) 번들에 뒤처진 종목 {len(stale)}개: {detail}{more}\n"
-            f"  기준: 표본 내 최신일 대비 {STALE_MAX_LAG_DAYS} 거래일. 폐지 종목은 제외했다.\n"
+            f"  기준: 표본 내 최신일 대비 {STALE_MAX_LAG_DAYS}일(달력). 폐지 종목은 제외했다.\n"
             "  01_collect 재실행 또는 유니버스 갱신이 필요하다."
         )
     log("✅ (6) 번들 신선도: 뒤처진 종목 없음(폐지 제외)")
