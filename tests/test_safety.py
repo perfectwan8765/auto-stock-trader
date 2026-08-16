@@ -22,18 +22,18 @@ def test_kill_switch_active_when_present(tmp_path):
 
 def test_circuit_breaker_order_count():
     cb = CircuitBreaker(max_orders_per_day=2, max_loss_usd=100.0)
-    cb.guard(); cb.record_order()
-    cb.guard(); cb.record_order()
+    cb.guard(side="BUY"); cb.record_order()
+    cb.guard(side="BUY"); cb.record_order()
     with pytest.raises(CircuitBreakerTripped):
-        cb.guard()  # 3번째 → 상한(2) 초과
+        cb.guard(side="BUY")  # 3번째 → 상한(2) 초과
 
 
 def test_circuit_breaker_loss_limit():
     cb = CircuitBreaker(max_orders_per_day=100, max_loss_usd=50.0)
-    cb.guard()
+    cb.guard(side="BUY")
     cb.record_loss(60.0)
     with pytest.raises(CircuitBreakerTripped):
-        cb.guard()  # 손실 60 > 50
+        cb.guard(side="BUY")  # 손실 60 > 50
 
 
 def test_circuit_breaker_survives_restart(tmp_path):
@@ -43,12 +43,12 @@ def test_circuit_breaker_survives_restart(tmp_path):
     cb.record_order()
     cb.record_order()
     with pytest.raises(CircuitBreakerTripped):
-        cb.guard()
+        cb.guard(side="BUY")
 
     revived = CircuitBreaker(max_orders_per_day=2, max_loss_usd=100.0, path=path, day="20260718")
     assert revived.orders_today == 2
     with pytest.raises(CircuitBreakerTripped):
-        revived.guard()   # 재시작으로 우회되지 않는다
+        revived.guard(side="BUY")   # 재시작으로 우회되지 않는다
 
 
 def test_circuit_breaker_resets_on_new_day(tmp_path):
@@ -59,7 +59,7 @@ def test_circuit_breaker_resets_on_new_day(tmp_path):
 
     next_day = CircuitBreaker(max_orders_per_day=2, max_loss_usd=100.0, path=path, day="20260719")
     assert next_day.orders_today == 0 and next_day.realized_loss_usd == 0.0
-    next_day.guard()   # 새 날이므로 통과
+    next_day.guard(side="BUY")   # 새 날이므로 통과
 
 
 def test_circuit_breaker_loss_persisted(tmp_path):
@@ -68,7 +68,7 @@ def test_circuit_breaker_loss_persisted(tmp_path):
     cb.record_loss(12.0)
     revived = CircuitBreaker(max_orders_per_day=99, max_loss_usd=10.0, path=path, day="20260718")
     with pytest.raises(CircuitBreakerTripped):
-        revived.guard()
+        revived.guard(side="BUY")
 
 
 def test_circuit_breaker_in_memory_when_no_path():
@@ -95,7 +95,7 @@ def test_daily_loss_not_double_counted_on_rerun(tmp_path):
     for _ in range(7):
         cb = CircuitBreaker(max_orders_per_day=99, max_loss_usd=700.0, path=path, day="20260718")
         cb.observe_daily_loss(100.0)      # 브로커가 매번 같은 값을 보고한다
-        cb.guard()                        # 트립되면 안 된다
+        cb.guard(side="BUY")              # 트립되면 안 된다
     assert cb.daily_loss_usd == 100.0
 
 
@@ -129,10 +129,37 @@ def test_guard_sums_daily_and_realized(tmp_path):
                         path=tmp_path / "cb.json", day="20260718")
     cb.observe_daily_loss(60.0)
     cb.record_loss(30.0)
-    cb.guard()                            # 90 < 100
+    cb.guard(side="BUY")                  # 90 < 100
     cb.record_loss(20.0)
     with pytest.raises(CircuitBreakerTripped):
-        cb.guard()                        # 110 >= 100
+        cb.guard(side="BUY")              # 110 >= 100
+
+
+def test_loss_limit_blocks_buys_but_not_sells():
+    """★ 손실 상한은 매수만 막는다 — 청산(리스크 축소)까지 막으면 방향이 거꾸로다.
+
+    주문건수 상한은 폭주 방지가 목적이라 매도에도 그대로 적용된다.
+    """
+    cb = CircuitBreaker(max_orders_per_day=100, max_loss_usd=50.0)
+    cb.observe_daily_loss(60.0)
+    cb.guard(side="SELL")                 # 손실 60 > 50 이어도 매도는 통과
+    with pytest.raises(CircuitBreakerTripped):
+        cb.guard(side="BUY")
+
+    # 주문건수 축은 매도도 센다.
+    counted = CircuitBreaker(max_orders_per_day=1, max_loss_usd=1e9)
+    counted.record_order()
+    with pytest.raises(CircuitBreakerTripped):
+        counted.guard(side="SELL")
+
+
+def test_guard_rejects_unknown_side():
+    """오타를 조용히 넘기면 손실 상한이 통째로 비활성화된다 — 안전한 기본값이 없는 자리다."""
+    cb = CircuitBreaker(max_orders_per_day=100, max_loss_usd=50.0)
+    cb.observe_daily_loss(60.0)
+    for bad in ("buy", "sell", "", None):
+        with pytest.raises(ValueError):
+            cb.guard(side=bad)
 
 
 def test_legacy_state_without_daily_loss(tmp_path):

@@ -176,14 +176,23 @@ def test_sell_skipped_when_not_sellable():
 
 # --- C: max-loss 배선 (봇 관리분 당일손익) ---
 
-def test_max_loss_gate_blocks_when_managed_loss_exceeds():
-    # 봇 관리 NVDA 당일손실 -50 → 손실상한 40 초과 → 발주 0.
+def test_max_loss_gate_blocks_buys_but_lets_liquidation_through():
+    """★ 손실 상한을 넘겨도 청산은 나가고 매수만 막힌다.
+
+    종전 스펙은 "발주 0건"이었고 그게 결함이었다. compute_rebalance가 매도를 앞에 두므로
+    손실 축을 전 주문에 걸면 **첫 매도에서 트립해 한 주도 못 판다** — 손실 제한 장치가
+    리스크 축소를 막는 셈이라 방향이 거꾸로다. --max-loss가 예산 전액(700)이던 동안은
+    이 축이 절대 발동하지 않아 드러나지 않았고, 70으로 내리면 살아난다.
+    """
     broker = MockBroker(holdings={"NVDA": 3.0}, daily_pnl={"NVDA": -50.0}, buying_power=700.0)
     state = ManagedState(managed={"NVDA"}, bootstrapped=True)
     cb = CircuitBreaker(max_orders_per_day=100, max_loss_usd=40.0)
     with pytest.raises(CircuitBreakerTripped):
         _runner(broker, managed_state=state, circuit_breaker=cb).run(TW, "20260716", dry_run=False)
-    assert broker.placed == []            # 상한 초과 → 주문 0건
+
+    # NVDA는 목표에서 빠졌으므로 exit 매도가 앞에 선다 — 그건 나가야 한다.
+    assert [o.side for o in broker.placed] == ["SELL"]
+    assert broker.placed[0].symbol == "NVDA"
 
 
 def test_max_loss_gate_excludes_manual_holdings():
@@ -340,7 +349,7 @@ def test_daily_loss_not_double_counted_across_runner_reruns(tmp_path):
     # 실제 당일손실은 -$100 하나뿐이다. 누적됐다면 700에 도달해 트립했을 것이다.
     assert cb.daily_loss_usd == 100.0
     assert json.loads(path.read_text())["daily_loss_usd"] == 100.0
-    cb.guard()                               # 상한 700 미만이므로 통과해야 한다
+    cb.guard(side="BUY")                               # 상한 700 미만이므로 통과해야 한다
 
 
 def test_daily_loss_survives_liquidation_of_losing_position(tmp_path):

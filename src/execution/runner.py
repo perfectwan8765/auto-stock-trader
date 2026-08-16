@@ -228,7 +228,7 @@ class RebalanceRunner:
         try:
             for i, order in enumerate(plan.orders):  # 매도先→매수 순서(compute_rebalance 보장)
                 if self.cb is not None:
-                    self.cb.guard()
+                    self.cb.guard(side=order.side)  # 손실 축은 매수에만 — 청산은 막지 않는다
                 if i > 0 and self.policy.order_sleep_s > 0:
                     time.sleep(self.policy.order_sleep_s)   # rate-limit 준수(호출 간 간격)
                 outcome, code = self._place_order(order)

@@ -23,7 +23,7 @@ class CircuitBreaker:
     """일일 주문건수·손실 상한.
 
     발주 루프 사용 패턴(러너):
-        cb.guard()            # 발주 직전 상한 확인(초과 시 CircuitBreakerTripped)
+        cb.guard(side=intent.side)  # 발주 직전 상한 확인(초과 시 CircuitBreakerTripped)
         broker.place(intent)
         cb.record_order()     # 발주 성공 후 카운트
         cb.observe_daily_loss(usd)  # 브로커가 보고한 당일 손실(절대값). 그날 최대치로 유지
@@ -83,15 +83,39 @@ class CircuitBreaker:
             "realized_loss_usd": round(self.realized_loss_usd, 4),
         }, indent=2, ensure_ascii=False))
 
-    def guard(self) -> None:
+    def guard(self, side: str) -> None:
+        """발주 직전 상한 확인. `side`는 `"BUY"` | `"SELL"`.
+
+        두 축의 적용 범위가 다르다:
+        - **주문건수** 상한은 전 주문에. 목적이 폭주 방지이므로 매도도 세야 한다.
+        - **손실** 상한은 **매수에만**. 목적이 "더 이상 돈을 걸지 마라"인데 매도는 리스크를
+          줄이는 행위다. 손실 제한 장치가 청산을 막으면 방향이 거꾸로다.
+
+        매도를 빼지 않으면 실제로 청산이 불가능해진다 — `compute_rebalance`가 매도를 앞에
+        배치하므로, 손실이 상한을 넘은 날에는 **첫 매도에서 트립해 한 주도 못 판다.**
+
+        `side`에 기본값을 두지 않는 이유: `"BUY"`를 기본으로 두면 인자를 빠뜨린 호출이 매도를
+        매수로 취급해 정확히 그 결함으로 되돌아간다. 안전한 기본값이 없는 자리다.
+
+        Args:
+            side: 발주하려는 주문의 방향.
+        Raises:
+            CircuitBreakerTripped: 해당 축의 상한을 넘었을 때.
+            ValueError: `side`가 `"BUY"`/`"SELL"`이 아닐 때. 조용히 넘기면 오타 하나로
+                손실 상한이 통째로 비활성화된다.
+        """
+        if side not in ("BUY", "SELL"):
+            raise ValueError(f"side는 'BUY' 또는 'SELL'이어야 한다: {side!r}")
         if self.orders_today >= self.max_orders_per_day:
             raise CircuitBreakerTripped(
                 f"일일 주문건수 상한 초과: {self.orders_today}/{self.max_orders_per_day}"
             )
+        if side == "SELL":
+            return
         total_loss = self.daily_loss_usd + self.realized_loss_usd
         if total_loss >= self.max_loss_usd:
             raise CircuitBreakerTripped(
-                f"일일 손실 상한 초과: ${total_loss:.2f}/${self.max_loss_usd:.2f}"
+                f"일일 손실 상한 초과: ${total_loss:.2f}/${self.max_loss_usd:.2f} (매수 차단)"
             )
 
     def record_order(self) -> None:
