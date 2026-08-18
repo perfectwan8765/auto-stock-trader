@@ -15,9 +15,6 @@ dependencies = [
   # 풀어 두면 해석기가 numpy 2.x 를 고른다.
   "numpy==1.26.4",
   "pandas==2.1.4",
-  # cython 은 런타임 의존이 아니다(pyqlib requires_dist 에 없음). 순수 이전을 위해
-  # 일단 그대로 두고, 별건 커밋에서 제거한다 (§12-12).
-  "cython==0.29.37",
 
   # --- Qlib 스택 ---
   "pyqlib==0.9.7",
