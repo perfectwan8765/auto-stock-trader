@@ -99,6 +99,7 @@ class CircuitBreaker:
 
         Args:
             side: 발주하려는 주문의 방향.
+
         Raises:
             CircuitBreakerTripped: 해당 축의 상한을 넘었을 때.
             ValueError: `side`가 `"BUY"`/`"SELL"`이 아닐 때. 조용히 넘기면 오타 하나로

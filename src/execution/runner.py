@@ -159,7 +159,8 @@ class RebalanceRunner:
 
     def _place_order(self, order: OrderIntent) -> tuple[str, str | None]:
         """단건 발주. rate-limit은 백오프 재시도, 장마감/개별거부는 코드로 분류 반환.
-        반환: ("placed", 주문ID) | ("skip", 사유) | ("abort", 사유). 미분류 오류는 전파한다."""
+        반환: ("placed", 주문ID) | ("skip", 사유) | ("abort", 사유). 미분류 오류는 전파한다.
+        """
         attempts = 0
         while True:
             try:

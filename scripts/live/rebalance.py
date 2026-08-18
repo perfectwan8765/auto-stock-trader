@@ -185,7 +185,8 @@ def main() -> None:
 
 def _cli() -> None:
     """CLI 경계: 라이브러리 예외(TossError·ExecutionError)를 clean 메시지·exit로 변환(개선10).
-    서킷브레이커·kill switch(ExecutionError)도 traceback 없이 정지 메시지로."""
+    서킷브레이커·kill switch(ExecutionError)도 traceback 없이 정지 메시지로.
+    """
     try:
         main()
     except (TossError, ExecutionError) as e:

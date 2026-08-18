@@ -18,7 +18,8 @@ _EXPIRY_SKEW_SEC = 60  # 만료 직전 안전 마진
 
 def _oauth_error_detail(resp: requests.Response) -> str:
     """개선13: 표준 OAuth error/error_description(비밀 아님)만 추출. 비-JSON이면 빈 문자열.
-    resp.text 전체(임의 본문·잠재 누설)는 절대 노출하지 않는다."""
+    resp.text 전체(임의 본문·잠재 누설)는 절대 노출하지 않는다.
+    """
     try:
         body = resp.json()
     except ValueError:
@@ -61,7 +62,8 @@ class TokenManager:
 
     def token_ttl_seconds(self) -> int | None:
         """캐시된 토큰의 남은 유효시간(초). 없으면 None.
-        만료 skew를 적용하지 않고 파일 값 그대로 — 캐싱 동작 확인용 공개 API."""
+        만료 skew를 적용하지 않고 파일 값 그대로 — 캐싱 동작 확인용 공개 API.
+        """
         data = self._load_cache_file()
         if data is None:
             return None

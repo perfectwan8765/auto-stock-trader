@@ -12,7 +12,8 @@ if str(_SRC) not in sys.path:
 
 def cli(main_fn) -> None:
     """CLI 경계: 라이브러리 TossError를 여기서만 SystemExit(clean 메시지)로 변환(개선10).
-    라이브러리 자체는 SystemExit을 던지지 않는다(cron 자동화가 예외로 잡도록)."""
+    라이브러리 자체는 SystemExit을 던지지 않는다(cron 자동화가 예외로 잡도록).
+    """
     from toss.errors import TossError  # sys.path 설정 후 지연 import
 
     try:

@@ -28,10 +28,13 @@ def load_config(config_arg: str) -> tuple[dict, Path]:
 
 
 def qlib_init_kwargs(cfg: dict) -> tuple[dict, Path]:
-    """cfg['qlib_init']의 provider_uri를 ROOT 기준 절대경로화. (qlib.init kwargs, provider_uri) 반환.
+    """cfg['qlib_init']의 provider_uri를 ROOT 기준 절대경로화.
+
+    (qlib.init kwargs, provider_uri) 를 반환한다.
 
     provider_uri를 별도로 돌려줘 호출부가 qlib.init 전에 쓸 수 있게 한다
-    (run_backtest는 init 전 instruments 파일 생성에 필요)."""
+    (run_backtest는 init 전 instruments 파일 생성에 필요).
+    """
     kw = dict(cfg["qlib_init"])
     provider_uri = ROOT / kw["provider_uri"]
     kw["provider_uri"] = str(provider_uri)

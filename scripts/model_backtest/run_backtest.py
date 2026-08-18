@@ -98,7 +98,8 @@ def main() -> None:
 
 def _gates(cfg: dict, market: str, dataset: DatasetH, recorder, model, evals_result: dict) -> None:
     """배선 게이트 4개 + 학습 게이트 1개. **절을 나눠 출력한다** — 섞으면 "배선은 맞는데
-    학습이 안 됐다"는 상태가 4:1로 묻힌다. 실제로 그 상태로 19런이 PASS로 기록됐다."""
+    학습이 안 됐다"는 상태가 4:1로 묻힌다. 실제로 그 상태로 19런이 PASS로 기록됐다.
+    """
     print("\n" + "=" * 60 + "\n게이트 — 배선 (설정이 의도대로 배선됐나)\n" + "=" * 60)
     passed = []
 

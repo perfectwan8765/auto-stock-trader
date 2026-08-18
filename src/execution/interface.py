@@ -49,7 +49,8 @@ class RebalancePlan:
 class RunResult:
     """리밸런싱 1회 실행의 산출물.
 
-    `RebalancePlan`과 같은 급의 seam 데이터 모델이라 러너가 아니라 여기 산다."""
+    `RebalancePlan`과 같은 급의 seam 데이터 모델이라 러너가 아니라 여기 산다.
+    """
 
     plan: RebalancePlan
     dry_run: bool

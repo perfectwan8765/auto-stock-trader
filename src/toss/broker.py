@@ -63,7 +63,8 @@ def _num(value, field: str) -> float:
 
 def _opt_num(value, field: str) -> float | None:
     """있으면 float, 없으면 None. 토스는 숫자를 문자열로 주는데 그대로 흘리면
-    슬리피지(체결가 − 결정가) 계산이 TypeError로 죽는다."""
+    슬리피지(체결가 − 결정가) 계산이 TypeError로 죽는다.
+    """
     return None if value is None else _num(value, field)
 
 
@@ -83,7 +84,8 @@ def _regular_market_open(resp, now: datetime) -> bool:
     """market-calendar 응답의 오늘 정규장 구간 [start, end) 안이면 True.
 
     시각은 모두 tz 포함(+09:00). isOpen 불린 필드가 없어 시각 비교로 판정한다.
-    파싱 불가·필드 누락이면 보수적으로 닫힘(False)."""
+    파싱 불가·필드 누락이면 보수적으로 닫힘(False).
+    """
     result = _result(resp)
     if not isinstance(result, dict):
         return False
@@ -132,6 +134,7 @@ class TossBroker:
 
         Returns:
             result.items[] 원소를 그대로 담은 리스트.
+
         Raises:
             TossError: 응답 형태가 예상과 다를 때.
         """
@@ -212,8 +215,10 @@ class TossBroker:
 
         Args:
             symbols: 조회할 심볼 목록.
+
         Returns:
             result[] 원소를 그대로 담은 리스트. 미제공 심볼은 빠진다.
+
         Raises:
             TossError: 응답이 리스트가 아닐 때.
         """
@@ -230,8 +235,10 @@ class TossBroker:
 
         Args:
             symbols: 조회할 심볼 목록.
+
         Returns:
             symbol -> 원 응답 dict. 미취급 심볼은 키 자체가 없다.
+
         Raises:
             TossError: 응답이 리스트가 아닐 때.
         """
@@ -274,6 +281,7 @@ class TossBroker:
 
         Returns:
             result dict. 미체결이면 `execution`이 없거나 비어 있다.
+
         Raises:
             TossError: 응답이 dict가 아닐 때.
         """
