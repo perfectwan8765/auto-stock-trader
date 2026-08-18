@@ -111,10 +111,10 @@ def main() -> None:
         cum += v
         if k <= 4 or v / len(f) >= 0.01:
             print(f"  {k:>2}명: {v:>6} ({v / len(f):>5.1%})   누적 {cum / len(f):>5.1%}")
-    print(f"\n  ★ ≥2명: {(f.n_owner >= 2).sum():>6} (**{(f.n_owner >= 2).mean():.1%}**)  ← 클러스터 정의")
+    print(f"\n  ★ ≥2명: {(f.n_owner >= 2).sum():>6} ({(f.n_owner >= 2).mean():.1%})  ← 클러스터 정의")
     print(f"    ≥3명: {(f.n_owner >= 3).sum():>6} ({(f.n_owner >= 3).mean():.1%})  ← 검정력 미달 예상")
     print(f"\n  (참고) accession ≥2건: {(f.n_accession >= 2).sum():>6} "
-          f"({(f.n_accession >= 2).mean():.1%}) — **이 값으로 세면 안 된다**")
+          f"({(f.n_accession >= 2).mean():.1%}) — ⚠️ 이 값으로 세면 안 된다")
     print(f"\n[완료] {OUT.relative_to(ROOT)}")
 
 

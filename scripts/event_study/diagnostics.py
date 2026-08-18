@@ -102,7 +102,7 @@ def main() -> None:
     print(f"  일별 alpha {beta[0]*100:+.4f}%  연환산 {beta[0]*252*100:+.2f}%  t={beta[0]/se:.2f}"
           f"  (관측 {len(y)}일)")
     print(f"  → 이벤트 단위 총 BHAR({df.bhar_gross.mean():+.2%})과 "
-          f"{'같은 부호' if np.sign(beta[0]) == np.sign(df.bhar_gross.mean()) else '**다른 부호**'}")
+          f"{'같은 부호' if np.sign(beta[0]) == np.sign(df.bhar_gross.mean()) else '⚠️ 다른 부호'}")
 
 
 if __name__ == "__main__":

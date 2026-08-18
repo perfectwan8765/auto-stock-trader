@@ -296,7 +296,7 @@ def check_prediction_shape(cfg: dict, pred, *, top_k: int | None = None) -> bool
     if not ok:
         n_bad = int((r < 1).sum())
         print(f"      → 거래일 {n_bad}일({n_bad / len(r):.1%})에서 보유가 바뀐다. 그 날의 top{top_k}는 "
-              f"신호가 아니라 **입력 행 순서**가 정했다. 초과수익·IR은 그만큼 추첨 결과다.")
+              f"신호가 아니라 입력 행 순서가 정했다. 초과수익·IR은 그만큼 추첨 결과다.")
     else:
         print("      (참고: 이 게이트는 연속 출력 모델에서 원리상 발화하지 않는다. 통과 근거로 쓰지 말 것.)")
     return ok

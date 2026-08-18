@@ -156,7 +156,7 @@ def main() -> None:
     n = len(rows)
     print(f"\n종목 {n:,} → 주식수 확보 {n_shares:,} ({100*n_shares/n:.1f}%) · "
           f"public_float {n_float:,} ({100*n_float/n:.1f}%)")
-    print(f"주식수 미확보 {n - n_shares:,} 중 — 미보고(404/빈값) {n_none:,} · **전송실패 {n_err:,}**")
+    print(f"주식수 미확보 {n - n_shares:,} 중 — 미보고(404/빈값) {n_none:,} · 전송실패 {n_err:,}")
     if n_err:
         print("  ⚠️ 전송실패는 재실행하면 회수될 수 있다. metric='error' 행으로 기록됨.")
     print(f"[완료] {OUT.relative_to(ROOT)}")
