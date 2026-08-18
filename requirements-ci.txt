@@ -1,0 +1,16 @@
+# CI 검사(lint·test·check-docrefs)에 필요한 것만. requirements.txt 의 부분집합이다.
+#
+# 왜 requirements.txt 를 쓰지 않나 — pyqlib·torch·lightgbm·xgboost 가 들어 있는데
+# tests/ 는 그 중 무엇도 import 하지 않는다(실측: import 최상위 모듈은 pandas·pytest와
+# 로컬 패키지뿐). 무거운 스택을 CI에 세우면 설치가 느려지고 Linux 휠·빌드 순서 제약
+# (numpy<2 → cython<3 → pyqlib)이 검사와 무관한 실패를 만든다.
+#
+# ⚠️ 핀은 requirements.txt 와 손으로 맞춘다. 그쪽을 올리면 여기도 올릴 것.
+
+numpy==1.26.4
+pandas==2.1.4
+requests>=2.31,<3
+python-dotenv>=1.0,<2
+
+pytest==9.1.1
+ruff==0.16.3
