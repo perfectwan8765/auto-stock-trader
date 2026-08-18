@@ -160,8 +160,19 @@ def main() -> None:
     print(f"\n회전율: 리밸 {len(tv)}회 · 연 Σ|Δw| {ann:.2f} "
           f"(정정 A-1 임계 12) → {'❌ 무효' if ann > 12 else '✅'}")
 
+    # §2.1 — 비겹침 3구간. **보고용이며 어느 구간도 선택 근거로 쓰지 않는다.**
+    print(f"\n구간별 (보고 전용) {'':10s}{'전략':>10s}{'벤치A':>10s}{'초과':>10s}")
+    for lo, hi in (("2004", "2011"), ("2012", "2018"), ("2019", "2026")):
+        m = (sr.index >= f"{lo}-01-01") & (sr.index <= f"{hi}-12-31")
+        if m.sum() < 250:
+            continue
+        y = m.sum() / 252
+        cs = (1 + sr[m]).prod() ** (1 / y) - 1
+        cb = (1 + rb[m]).prod() ** (1 / y) - 1
+        print(f"  {lo}~{hi} ({m.sum():4d}일){'':6s}{cs:>10.2%}{cb:>10.2%}{cs - cb:>10.2%}")
+
     if args.csv:
-        pd.DataFrame({"strategy": sr, "benchmark": br, "excess": ex}).to_csv(args.csv)
+        pd.DataFrame({"strategy": sr, "bench_rebal": rb, "bench_bh": bh}).to_csv(args.csv)
         print(f"\n수익 계열 저장: {args.csv}")
 
 
