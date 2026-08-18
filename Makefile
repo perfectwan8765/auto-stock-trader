@@ -8,8 +8,15 @@
 # 여기서는 "파일 → 파일" 관계를 그대로 선언한다. make가 mtime으로 필요한 선행만 돌리고,
 # 규칙 없는 노드는 즉시 드러난다.
 
-PY  := .venv/bin/python
-RUFF := .venv/bin/ruff
+# `uv run` 은 호출마다 락·환경이 최신인지 확인하고 어긋나면 맞춘다. 그 60ms 를 내고
+# "환경이 낡았다"는 사고 유형을 통째로 없앤다.
+#
+# CI 는 UV 하나만 덮어 두 변수를 다 바꾼다 — `make test UV="uv run --no-sync"`.
+# CI 에서 맨 `uv run` 을 쓰면 --only-group checks 로 좁혀 놓은 환경에 무거운 스택이
+# 되살아난다(실측: docs/research/uv-adoption.md §9.2).
+UV   := uv run
+PY   := $(UV) python
+RUFF := $(UV) ruff
 DP  := scripts/data_pipeline
 TP  := scripts/toss_probe
 
