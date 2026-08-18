@@ -76,7 +76,8 @@ grilling 결정(2026-07-17, [../../qlib-toss.md](../../qlib-toss.md) Phase 3)의
 | 유니버스 | `all` (41종목) | ① 배선용 |
 | 팩터 / 모델 | Alpha158(158) / LGBModel | Phase 0 전략, seed=2026 |
 | **라벨 (B2)** | `Ref($close,-6)/Ref($close,-1)-1` | 주간 5거래일 fwd override |
-| train/valid/test | 2015-01-02~2021-06-30 / ~2022-12-31 / ~2026-07-16 | 시간순, test 최근 30% 격리·1회만 관측 |
+| train/valid/test | 2015-01-02~2021-06-22 / 2021-07-01~2022-12-21 / 2023-01-01~2026-07-16 | 시간순, test 최근 30% 격리·1회만 관측 |
+| **분할 embargo** | 각 구간 종료일을 6거래일 당김 | 라벨이 `Ref($close,-6)`로 미래를 보므로 갭 0이면 다음 구간 가격이 학습 정답에 섞인다 |
 | 정규화 fit 구간 | train만 | valid/test 누설 방지 |
 | **리밸 스텝 (B2)** | `time_per_step: week` | 주간 |
 | 전략 | TopkDropout topk=20, n_drop=5 | 회전율=n_drop 제어(개선7) |

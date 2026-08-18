@@ -18,7 +18,7 @@ data_handler_config: &data_handler_config
   start_time: 2015-01-02
   end_time: 2026-07-16
   fit_start_time: 2015-01-02
-  fit_end_time: 2021-06-30
+  fit_end_time: 2021-06-22
   instruments: sp500
   label: [["Ref($close, -6)/Ref($close, -1) - 1"], ["LABEL0"]]   # 베이스라인과 동일(주간 5일 fwd)
   infer_processors:
@@ -84,6 +84,10 @@ task:
         module_path: qlib.contrib.data.handler
         kwargs: *data_handler_config
       segments:
-        train: [2015-01-02, 2021-06-30]
-        valid: [2021-07-01, 2022-12-31]
+        # ★ embargo — 라벨이 Ref($close,-6)로 6거래일 미래를 보므로 각 구간 종료일을
+        # 6거래일 당겼다. 갭이 0이면 구간 마지막 샘플의 라벨이 다음 구간 가격으로 계산돼
+        # 누수가 된다(train→valid는 검증 오염, valid→test는 early-stop이 test를 엿봄).
+        # ⚠️ 라벨 호라이즌을 바꾸면 이 종료일들도 함께 바꿔야 한다.
+        train: [2015-01-02, 2021-06-22]
+        valid: [2021-07-01, 2022-12-21]
         test:  [2023-01-01, 2026-07-16]
