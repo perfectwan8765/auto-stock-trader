@@ -6,6 +6,7 @@ live 스크립트(run_backtest·generate_signal)가 공유. `import qlib`보다 
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 # 신버전 mlflow는 파일스토어 tracking 백엔드를 기본 차단 → 로컬 실험 기록에 opt-in.
@@ -153,3 +154,58 @@ def check_learning(cfg: dict, model, evals_result: dict) -> bool:
         print("      → 첫 반복 이후 모든 반복이 검증을 악화시켰다 = 학습이 진행되지 않았다.")
 
     return ok_a and ok_c
+
+
+# ------------------------------------------------------------------ 스윕 시행 경계
+
+def sweep_id(tag: str) -> str:
+    """스윕 하나를 식별하는 ID. 같은 스윕의 시행들을 나중에 묶어 세는 열쇠다."""
+    from datetime import datetime
+    return f"{tag}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+
+@contextmanager
+def trial_run(experiment_name: str, sweep: str, trial: str, **params):
+    """스윕의 **한 시행을 독립 런으로** 연다.
+
+    이게 필요한 이유는 도구 기본동작이다 — recorder를 명시적으로 열지 않으면 `LGBModel.fit`이
+    `R.log_metrics`를 부르는 부수효과로 런이 **한 번 생기고 그대로 재사용**된다. 그러면 후보
+    n개의 검증곡선이 같은 metric 키에 step 0부터 겹쳐 쓰이고, **어느 곡선이 어느 후보인지
+    사후에 복원할 수 없다.** 실제로 tune_hyperparams 6후보·probe_label_horizon 3후보가 그렇게
+    1런으로 접혔다(trial-accounting.md §1.1.1).
+
+    ⚠️ **부모-자식 런은 쓰지 않는다.** `MLflowRecorder.start_run`이 `mlflow.start_run`에
+    `nested`를 넘기지 않으므로(위치인자 3개만) qlib 경로로는 중첩이 불가능하다. 대신 `sweep`
+    태그로 묶는다 — 그룹핑이라는 목적은 같고 프레임워크와 싸우지 않는다.
+
+    Args:
+        experiment_name: MLflow experiment 이름. 스윕 종류별로 갈라 둘 것.
+        sweep: `sweep_id()`가 만든 스윕 식별자.
+        trial: 후보 이름. **이것이 남지 않으면 시행이 익명이 된다.**
+        **params: 그 후보를 재현하는 데 필요한 값 전부.
+    """
+    from qlib.workflow import R
+    with R.start(experiment_name=experiment_name, recorder_name=f"{sweep}::{trial}"):
+        R.log_params(sweep_id=sweep, trial_name=trial, kind="trial", **params)
+        yield R.get_recorder()
+
+
+def log_selection(experiment_name: str, sweep: str, ranking, picked: str, criterion: str) -> None:
+    """스윕의 **선택 자체**를 원장에 남긴다. 이게 다중검정의 실체다.
+
+    후보 n개를 돌린 뒤 하나를 고르는 행위는 시행 n회를 소비한 선택인데, 종전에는 그 선택이
+    stdout으로만 갔다 — 원장에는 "런 1개"만 남아 몇 개 중에서 골랐는지 알 수 없었다.
+
+    선택은 시행이 아니므로 `kind="selection"`으로 갈라 둔다. 시행 카운트에 이 런을 세면
+    이중계상이다(trial-ledger.md 층② 규칙).
+
+    Args:
+        ranking: 후보 이름을 선택 기준 내림차순으로 담은 순서열.
+        picked: 실제로 고른 후보.
+        criterion: 무엇을 기준으로 골랐는가(예: `"valid_RankIC"`).
+    """
+    from qlib.workflow import R
+    with R.start(experiment_name=experiment_name, recorder_name=f"{sweep}::_selection"):
+        R.log_params(sweep_id=sweep, kind="selection", criterion=criterion,
+                     n_candidates=len(ranking), picked=picked,
+                     ranking=",".join(map(str, ranking)))

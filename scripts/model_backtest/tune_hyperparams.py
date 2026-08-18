@@ -5,6 +5,10 @@
 
 ⚠️ 규율: test는 ②에서 이미 1회 관측 → 여기서 **재관측 금지**. valid 지표로만 후보 선택.
    백테스트/PortAnaRecord 실행 안 함. dataset은 1회 빌드 후 후보 간 재사용(피처 동일, 모델만 교체).
+⚠️ 원장: 후보마다 **독립 런**을 연다. 안 열면 6개 곡선이 한 런에 step 0부터 겹쳐 쓰여
+   어느 곡선이 어느 후보인지 영구히 복원 불가다(trial-accounting.md §1.1.1). 후보 선택 자체도
+   `_selection` 런으로 남긴다 — 6개 중 하나를 고르는 것이 다중검정의 실체인데 종전에는
+   stdout으로만 갔다. 손익 계열은 의도적으로 없다(백테스트=test 관측이므로 규율 위반).
 
 실행:  .venv/bin/python scripts/model_backtest/tune_hyperparams.py [--config <yaml>]
 """
@@ -19,11 +23,14 @@ os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
 import pandas as pd
 import ruamel.yaml as yaml
 
+from _common import log_selection, sweep_id, trial_run  # qlib import 전(MLFLOW env)
+
 import qlib
 from qlib.contrib.model.gbdt import LGBModel
 from qlib.data.dataset import DatasetH
 from qlib.data.dataset.handler import DataHandlerLP
 from qlib.utils import init_instance_by_config
+from qlib.workflow import R
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = "workflow_config_alpha158_lgb_sp500.yaml"
@@ -72,13 +79,21 @@ def main() -> None:
     dataset: DatasetH = init_instance_by_config(cfg["task"]["dataset"])
     valid_label = dataset.prepare("valid", col_set="label", data_key=DataHandlerLP.DK_R).iloc[:, 0]
 
+    sweep = sweep_id("tune")
+    exp = f"sweep_tune_{cfg_path.stem}"
+    print(f"📒 스윕 {sweep} — 후보 {len(CANDIDATES)}개, experiment={exp}")
+
     rows = []
     for name, params in CANDIDATES.items():
-        model = LGBModel(**COMMON, **params)
-        model.fit(dataset)
-        pred = model.predict(dataset, segment="valid")
-        ic, ric, icir = calc_valid_ic(pred, valid_label)
-        best_it = model.model.best_iteration
+        # 후보 이름을 param으로 남긴다. 재현에 필요한 나머지는 이 파일의 CANDIDATES에 있고
+        # 커밋 해시가 mlflow.source.git.commit으로 자동 기록되므로 (이름 + 커밋)이면 충분하다.
+        with trial_run(exp, sweep, name, **{k: str(v) for k, v in params.items()}):
+            model = LGBModel(**COMMON, **params)
+            model.fit(dataset)
+            pred = model.predict(dataset, segment="valid")
+            ic, ric, icir = calc_valid_ic(pred, valid_label)
+            best_it = model.model.best_iteration
+            R.log_metrics(valid_IC=ic, valid_RankIC=ric, valid_ICIR=icir, best_iter=best_it)
         rows.append((name, ic, ric, icir, best_it))
         print(f"   {name:12s} IC={ic:+.4f} RankIC={ric:+.4f} ICIR={icir:+.3f} best_iter={best_it}")
 
@@ -87,7 +102,10 @@ def main() -> None:
     print("\n" + "=" * 60 + "\nvalid 랭킹 (RankIC 내림차순) — test 미관측\n" + "=" * 60)
     print(res.to_string(index=False))
     best = res.iloc[0]
+    # 선택을 원장에 남긴다. 시행이 아니므로 kind="selection"으로 갈라 둔다(이중계상 방지).
+    log_selection(exp, sweep, res["cand"].tolist(), best["cand"], "valid_RankIC")
     print(f"\n👉 최고: {best['cand']} (valid RankIC={best['valid_RankIC']:+.4f}, best_iter={best['best_iter']})")
+    print(f"   선택 기록: experiment={exp} · {sweep}::_selection")
     print("   baseline_cn이 즉시 early-stop([1])이면 언더피팅 확인. 개선 후보를 config에 반영 후 walk-forward로 확증.")
 
 

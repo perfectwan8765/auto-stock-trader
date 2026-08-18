@@ -5,6 +5,8 @@
 valid IC/RankIC가 개선되는지 본다. 모델은 A1의 안전 후보(med_reg) 고정.
 
 ⚠️ 규율: test 미관측(②서 1회 봄). valid 지표로만 판정. 백테스트/PortAnaRecord 없음.
+⚠️ 원장: 호라이즌마다 독립 런. 종전에는 3개가 한 런에 겹쳐 기록됐다(trial-accounting.md §1.1.1).
+   라벨 정의 변경은 설계축이므로 **시행으로 센다**(trial-ledger.md 층② 규칙).
    회전율·비용 이득(월간 리밸)은 별개(백테스트 사안) — 여기선 순수 '신호 예측력'만 비교.
 
 실행:  .venv/bin/python scripts/model_backtest/probe_label_horizon.py [--config <yaml>]
@@ -21,11 +23,14 @@ os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
 import pandas as pd
 import ruamel.yaml as yaml
 
+from _common import log_selection, sweep_id, trial_run  # qlib import 전(MLFLOW env)
+
 import qlib
 from qlib.contrib.model.gbdt import LGBModel
 from qlib.data.dataset import DatasetH
 from qlib.data.dataset.handler import DataHandlerLP
 from qlib.utils import init_instance_by_config
+from qlib.workflow import R
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = "workflow_config_alpha158_lgb_sp500.yaml"
@@ -65,6 +70,10 @@ def main() -> None:
     init_kwargs["provider_uri"] = str(ROOT / init_kwargs["provider_uri"])
     qlib.init(**init_kwargs)
 
+    sweep = sweep_id("horizon")
+    exp = f"sweep_horizon_{cfg_path.stem}"
+    print(f"📒 스윕 {sweep} — experiment={exp}")
+
     rows = []
     for name, h in HORIZONS.items():
         ds_cfg = copy.deepcopy(cfg["task"]["dataset"])
@@ -73,10 +82,14 @@ def main() -> None:
         dataset: DatasetH = init_instance_by_config(ds_cfg)
         label = dataset.prepare("valid", col_set="label", data_key=DataHandlerLP.DK_R).iloc[:, 0]
 
-        model = LGBModel(**MODEL)
-        model.fit(dataset)
-        pred = model.predict(dataset, segment="valid")
-        ic, ric, icir = calc_valid_ic(pred, label)
+        with trial_run(exp, sweep, name, fwd_days=str(h),
+                       label=ds_cfg["kwargs"]["handler"]["kwargs"]["label"][0][0]):
+            model = LGBModel(**MODEL)
+            model.fit(dataset)
+            pred = model.predict(dataset, segment="valid")
+            ic, ric, icir = calc_valid_ic(pred, label)
+            R.log_metrics(valid_IC=ic, valid_RankIC=ric, valid_ICIR=icir,
+                          best_iter=model.model.best_iteration)
         rows.append((name, h, ic, ric, icir, model.model.best_iteration))
         print(f"   {name:14s} IC={ic:+.4f} RankIC={ric:+.4f} ICIR={icir:+.3f} best_iter={model.model.best_iteration}")
 
@@ -86,7 +99,10 @@ def main() -> None:
     base = res[res.horizon == "weekly_5d"]["valid_RankIC"].iloc[0]
     best = res.sort_values("valid_RankIC", ascending=False).iloc[0]
     lift = (best["valid_RankIC"] - base) / abs(base) if base else float("nan")
+    log_selection(exp, sweep, res.sort_values("valid_RankIC", ascending=False)["horizon"].tolist(),
+                  best["horizon"], "valid_RankIC")
     print(f"\n👉 최고 horizon: {best['horizon']} (RankIC={best['valid_RankIC']:+.4f}), 주간대비 {lift:+.0%}")
+    print(f"   선택 기록: experiment={exp} · {sweep}::_selection")
     print("   유의미↑(예: RankIC>0.015 & 주간대비 큰 개선)면 월간 전략 grilling 가치.")
     print("   여전히 노이즈급이면 신호원에 여지 없음 → 배관(Phase 5 mock)+Phase 0 실측 대기로 전환.")
 
