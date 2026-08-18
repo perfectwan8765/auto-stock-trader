@@ -45,8 +45,8 @@ def month_end_dates(index: pd.DatetimeIndex) -> list[pd.Timestamp]:
     return list(s.groupby([index.year, index.month]).last())
 
 
-def run(close: pd.DataFrame, open_: pd.DataFrame, *, timing: bool,
-        rebalance: bool = True, target_fn=None) -> dict:
+def run(close: pd.DataFrame, open_: pd.DataFrame, *, timing: bool, rebalance: bool = True,
+        target_fn=None, risk: list[str] | None = None, min_history: int | None = None) -> dict:
     """전략 또는 벤치마크를 굴린다. 세 경로가 **같은 함수를 지나는 것이 요점이다** —
     편입 규칙·집행 시점·비용 처리가 갈리면 초과수익이 그 차이를 재게 된다.
 
@@ -58,10 +58,16 @@ def run(close: pd.DataFrame, open_: pd.DataFrame, *, timing: bool,
         target_fn: 주면 신호를 대신 계산한다 — `(과거종가, 편입목록, 전체컬럼) -> 목표비중`.
             **집행 시점·비용·드리프트 처리를 두 전략이 공유하기 위한 이음매다.** 갈라 두면
             초과수익이 그 구현 차이를 재게 된다. 기본값(None)은 절대 모멘텀이다.
+        risk: 위험자산 목록. 기본은 `RISK`. **전략과 벤치마크에 같은 값을 줘야 한다** —
+            갈라 두면 초과수익이 유니버스 차이를 재게 된다.
+        min_history: 편입에 요구하는 최소 거래일. 기본은 `MIN_HISTORY`. 룩백이 길어지면
+            같이 늘려야 하고, **전략과 벤치마크가 같아야** 편입 시점이 갈리지 않는다.
 
     Returns:
         `equity`(일별 순자산) · `weights`(집행 시점 목표비중) · `turnover`(리밸별 Σ|Δw|).
     """
+    universe = list(RISK if risk is None else risk)
+    need = MIN_HISTORY if min_history is None else min_history
     dates = close.index
     cols = list(close.columns)
     equity = pd.Series(index=dates, dtype=float)
@@ -76,7 +82,7 @@ def run(close: pd.DataFrame, open_: pd.DataFrame, *, timing: bool,
         exec_i = i + 1                         # §1: 월말 종가 신호 → 다음 거래일 시가 집행
 
         # 편입 자격: 253거래일 이력이 쌓인 자산만 (§1)
-        eligible = [s for s in RISK if close[s].iloc[: i + 1].notna().sum() >= MIN_HISTORY]
+        eligible = [s for s in universe if close[s].iloc[: i + 1].notna().sum() >= need]
         if not eligible:
             continue
         if pos is not None and not rebalance:
