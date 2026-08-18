@@ -45,7 +45,8 @@ def month_end_dates(index: pd.DatetimeIndex) -> list[pd.Timestamp]:
     return list(s.groupby([index.year, index.month]).last())
 
 
-def run(close: pd.DataFrame, open_: pd.DataFrame, *, timing: bool, rebalance: bool = True) -> dict:
+def run(close: pd.DataFrame, open_: pd.DataFrame, *, timing: bool,
+        rebalance: bool = True, target_fn=None) -> dict:
     """전략 또는 벤치마크를 굴린다. 세 경로가 **같은 함수를 지나는 것이 요점이다** —
     편입 규칙·집행 시점·비용 처리가 갈리면 초과수익이 그 차이를 재게 된다.
 
@@ -54,6 +55,9 @@ def run(close: pd.DataFrame, open_: pd.DataFrame, *, timing: bool, rebalance: bo
         open_: 일별 시가(조정). 집행가다.
         timing: True면 252일 총수익 부호로 자산별 온/오프, False면 항상 위험자산 전량.
         rebalance: False면 첫 달에만 매수하고 이후 비중을 방치한다(순수 매수보유).
+        target_fn: 주면 신호를 대신 계산한다 — `(과거종가, 편입목록, 전체컬럼) -> 목표비중`.
+            **집행 시점·비용·드리프트 처리를 두 전략이 공유하기 위한 이음매다.** 갈라 두면
+            초과수익이 그 구현 차이를 재게 된다. 기본값(None)은 절대 모멘텀이다.
 
     Returns:
         `equity`(일별 순자산) · `weights`(집행 시점 목표비중) · `turnover`(리밸별 Σ|Δw|).
@@ -78,15 +82,18 @@ def run(close: pd.DataFrame, open_: pd.DataFrame, *, timing: bool, rebalance: bo
         if pos is not None and not rebalance:
             continue                           # 매수보유: 첫 집행 후 손대지 않는다
 
-        # 신호: 자산별 252거래일 총수익 부호. 종가 i까지만 본다 = 룩아헤드 없음
-        target = pd.Series(0.0, index=cols)
-        w = 1.0 / len(eligible)
-        for s in eligible:
-            hist = close[s].iloc[: i + 1].dropna()
-            if not timing or hist.iloc[-1] / hist.iloc[-LOOKBACK - 1] - 1 > 0:
-                target[s] = w
-            else:
-                target[CASH] += w              # 추세 음수 → 그 슬리브만 현금
+        # 신호. 종가 i까지만 본다 = 룩아헤드 없음
+        if target_fn is not None:
+            target = target_fn(close.iloc[: i + 1], eligible, cols)
+        else:
+            target = pd.Series(0.0, index=cols)
+            w = 1.0 / len(eligible)
+            for s in eligible:
+                hist = close[s].iloc[: i + 1].dropna()
+                if not timing or hist.iloc[-1] / hist.iloc[-LOOKBACK - 1] - 1 > 0:
+                    target[s] = w
+                else:
+                    target[CASH] += w          # 추세 음수 → 그 슬리브만 현금
 
         # 집행 전날까지의 순자산 진행(주식수 고정 = 비중 드리프트)
         if pos is not None:
