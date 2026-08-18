@@ -1,10 +1,10 @@
 """매크로 ETF 장기반전(자산군 가치) — 1층 판정.
 
-정의는 사전등록 `docs/project/etp-reversal-prereg.md` §1·§2. 1,260거래일(5년) 총수익으로
+정의는 사전등록 `docs/project/etp-prereg.md` §0(공통)·§3(연구 C). 1,260거래일(5년) 총수익으로
 자산 간 순위 → **하위 절반 k=⌈N/2⌉ 등가중** · 항상 100% 투자 · 편입은 1,261거래일 이력.
 나머지는 자매 문서 2편에서 상속한다.
 
-⚠️ §2.3 QQQ 민감도는 **보고 전용이며 판정은 10자산으로만** 한다.
+⚠️ §3의 QQQ 민감도는 **보고 전용이며 판정은 10자산으로만** 한다.
 
 실행:  OMP_NUM_THREADS=1 .venv/bin/python scripts/etp_trend/run_reversal.py
 """

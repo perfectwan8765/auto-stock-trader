@@ -160,8 +160,7 @@ MinBTL: 백테스트 183주(3.52년)로는 최대 독립시행 **N=18**인데 �
 | 5 | **횡단면 모멘텀** — 상위 절반, 항상 100% 투자 | **+0.84%** | 0.755 | ⛔ kill 2 |
 | 6 | **장기반전** — 1,260일 하위 절반 | **−1.20%** | 0.274 | ⛔ kill 1·2 |
 
-각 판정 상세: [`etp-trend-prereg.md`](etp-trend-prereg.md) ·
-[`etp-rotation-prereg.md`](etp-rotation-prereg.md) · [`etp-reversal-prereg.md`](etp-reversal-prereg.md)
+세 판정 상세·정정·사전지식: [`etp-prereg.md`](etp-prereg.md) (§1 A · §2 B · §3 C)
 
 ### 진단이 순서대로 맞았다
 
