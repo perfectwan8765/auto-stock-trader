@@ -31,6 +31,7 @@ from .interface import (
     RebalancePlan,
     RunnerPolicy,
     RunResult,
+    SkipReason,
 )
 from .managed import ManagedState
 from .orderlog import write_order_log
@@ -151,7 +152,7 @@ class RebalanceRunner:
             )
 
         new_orders: list[OrderIntent] = []
-        extra_skips: list[tuple[str, str]] = []
+        extra_skips: list[tuple[str, SkipReason]] = []
         for o in plan.orders:
             if o.side == "SELL" and o.kind == "quantity":
                 sellable = sellable_map[o.symbol]

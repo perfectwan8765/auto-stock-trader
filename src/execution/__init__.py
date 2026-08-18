@@ -8,10 +8,14 @@ from .interface import (
     Broker,
     Fill,
     OrderIntent,
+    OrderKind,
+    OrderReason,
+    OrderSide,
     RebalanceParams,
     RebalancePlan,
     RunnerPolicy,
     RunResult,
+    SkipReason,
 )
 from .managed import ManagedState
 from .rebalance import compute_rebalance, make_client_order_id
@@ -19,6 +23,7 @@ from .runner import RebalanceRunner
 
 __all__ = [
     "AccountSnapshot", "Broker", "Fill", "OrderIntent",
+    "OrderKind", "OrderReason", "OrderSide", "SkipReason",
     "RebalanceParams", "RebalancePlan", "RunnerPolicy",
     "ManagedState",
     "compute_rebalance", "make_client_order_id",

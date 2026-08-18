@@ -2,7 +2,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
+
+# 이 네 어휘는 주문로그·대시보드가 읽는 계약이다 — tests/test_runner_behaviour.py가
+# 스킵 사유 집합을 고정하고 scripts/dashboard/app.py가 한글 라벨로 매핑한다.
+# str로 두면 오타가 런타임까지 살아남아 대시보드에서 "알 수 없는 사유"로만 드러난다.
+OrderSide = Literal["BUY", "SELL"]
+OrderKind = Literal["amount", "quantity"]
+OrderReason = Literal["exit", "exit_partial", "trim", "enter", "add"]
+SkipReason = Literal[
+    "within_band",
+    "below_min_order",
+    "insufficient_buying_power",
+    "partial_insufficient_buying_power",
+    # 아래 셋은 러너가 붙인다(compute_rebalance가 아니라) — 화이트리스트·T+N 결제 판단이다.
+    "excluded_manual",
+    "not_sellable_settlement",
+    "sell_clamped_to_sellable",
+]
 
 
 @dataclass(frozen=True)
@@ -10,14 +27,13 @@ class OrderIntent:
     """발주 의도(계획). dry-run은 이 리스트만 만들고 실발주는 broker.place로."""
 
     symbol: str
-    side: str            # "BUY" | "SELL"
-    kind: str            # "amount"(USD, 매수) | "quantity"(주식수, 매도)
-    value: float         # 매수=USD 금액, 매도=주식수
+    side: OrderSide
+    kind: OrderKind      # 매수는 amount(USD), 매도는 quantity(주식수)로만 나간다
+    value: float         # kind에 따라 USD 금액 또는 주식수
     client_order_id: str  # 결정적 멱등키 — 재시도·재개 시 중복주문 방지
-    # "exit"(편출 전량) | "exit_partial"(편출인데 매도가능수량으로 줄어 잔량이 남는다)
-    # | "trim"(초과보유 축소) | "enter"(신규) | "add"(추가매수)
-    # exit / exit_partial 구분은 ManagedState가 관리셋에서 뺄지 정하는 근거다.
-    reason: str
+    # exit / exit_partial 구분은 ManagedState가 관리셋에서 뺄지 정하는 근거다 —
+    # 잔량이 남은 exit을 exit_partial로 표시하지 않으면 그 종목이 M에도 X에도 없게 된다.
+    reason: OrderReason
 
 
 @dataclass(frozen=True)
@@ -44,11 +60,7 @@ class RebalancePlan:
     """리밸런싱 산출물. orders는 실행 순서(매도先→매수), skipped는 무동작 사유."""
 
     orders: list[OrderIntent]
-    # (symbol, reason): within_band | below_min_order | insufficient_buying_power
-    #                 | partial_insufficient_buying_power | excluded_manual
-    #                 | not_sellable_settlement | sell_clamped_to_sellable
-    # 뒤 셋은 러너가 붙인다(compute_rebalance가 아니라) — 화이트리스트·T+N 결제 판단이다.
-    skipped: list[tuple[str, str]]
+    skipped: list[tuple[str, SkipReason]]
 
 
 @dataclass
