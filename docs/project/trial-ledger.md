@@ -2,6 +2,8 @@
 
 - 개설: 2026-08-18
 - 근거: [`../research/trial-accounting.md`](../research/trial-accounting.md) §8.8·§10-1
+- **서술 이력은 [`attempt-history.md`](attempt-history.md)** — 시도별 연대기와 "다시 하지 말 것" 목록.
+  이 원장은 **카운트의 정본**이고 그쪽은 **서술의 정본**이다
 - ⚠️ **이 파일은 git 추적 대상이고 원격은 public이다.** 계좌번호·잔액·보유 종목을 쓰지 말 것.
   들어가는 것은 백테스트 지표뿐이다.
 
