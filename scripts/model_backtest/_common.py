@@ -209,3 +209,89 @@ def log_selection(experiment_name: str, sweep: str, ranking, picked: str, criter
         R.log_params(sweep_id=sweep, kind="selection", criterion=criterion,
                      n_candidates=len(ranking), picked=picked,
                      ranking=",".join(map(str, ranking)))
+
+
+# ------------------------------------------------- 게이트 B: 예측이 포트폴리오를 정하는가
+
+_SHUFFLES = 3          # 순열 수. 연속 출력 모델은 몇 번을 섞어도 1.0이라 적어도 된다
+_SHUFFLE_SEED = 2026   # 고정 — 게이트 판정이 실행마다 달라지면 안 된다
+
+
+def check_prediction_shape(cfg: dict, pred, *, top_k: int | None = None) -> bool:
+    """게이트 B — 예측이 top-k 포트폴리오를 **실제로 결정하는가**.
+
+    ⚠️⚠️ **단방향 게이트다. 통과를 근거로 쓰면 안 된다.** 이 진단은 이산 출력(트리)에서만
+    발화하고 연속 출력(NN·선형)에서는 원리상 절대 발화하지 않는다. 실증도 있다 — 같은 검사에서
+    LightGBM은 걸리고 GRU는 100% 통과하는데, R²는 GRU가 더 나쁘다
+    (`docs/research/training-gates.md` §1.3). **"걸렸으면 확실히 문제"로만 쓴다.**
+
+    **왜 IC로 대체되지 않는가**: IC는 스케일 불변이고 동점이 만들어낸 순서에서도 값이 나온다.
+    완전 상수 예측의 Pearson IC는 NaN이 아니라 부동소수점 잔차(~7e-18)이므로
+    `np.isfinite(ic.mean())` 검사를 통과하고, 서로 다른 값이 3개뿐인 예측이 IC 0.033을 낸다 —
+    이 저장소 베이스라인 IC 0.0121보다 크다.
+
+    **판정**: 값은 그대로 두고 **행 순서만 섞어** top-k를 다시 뽑는다. 신호가 포트폴리오를
+    결정한다면 결과가 같아야 한다. 하나라도 달라지면 그 날의 보유는 신호가 아니라 정렬 순서가
+    정한 것이다. `TopkDropoutStrategy`가 `sort_values(ascending=False)`로 고르고 pandas 기본
+    quicksort는 stable이 아니므로, 동점의 순서는 입력 행 순서가 정한다.
+
+    임계가 없다는 점이 이 게이트의 장점이다 — 고유값 비율에 하한을 정하면 그게 연구자
+    자유도가 되지만, "섞으면 바뀌는가"는 이산/연속을 임계 없이 가른다.
+
+    Args:
+        cfg: workflow config. `port_analysis_config.strategy.kwargs.topk`에서 k를 읽는다.
+        pred: `recorder.load_object("pred.pkl")` 결과. (datetime, instrument) MultiIndex.
+        top_k: k를 직접 줄 때. 생략하면 cfg에서 읽는다.
+
+    Returns:
+        통과 여부. **계산 불가면 `True`를 돌려주되 그 사실을 출력한다** — 단방향 게이트이므로
+        "돌리지 못했다"는 문제의 증거가 아니다. 다만 조용히 넘기지는 않는다.
+    """
+    import numpy as np
+    import pandas as pd
+
+    if top_k is None:
+        try:
+            top_k = int(cfg["port_analysis_config"]["strategy"]["kwargs"]["topk"])
+        except (KeyError, TypeError, ValueError):
+            print("   ⚠️ [B 결정성] 계산 불가 — config에 strategy.kwargs.topk가 없다. "
+                  "단방향 게이트라 이것이 통과 근거는 아니다.")
+            return True
+
+    s = pred.iloc[:, 0] if isinstance(pred, pd.DataFrame) else pred
+    if not isinstance(s.index, pd.MultiIndex) or "datetime" not in (s.index.names or []):
+        print(f"   ⚠️ [B 결정성] 계산 불가 — 예측 인덱스가 (datetime, instrument)가 아니다: "
+              f"{list(s.index.names or [])}")
+        return True
+
+    rng = np.random.default_rng(_SHUFFLE_SEED)
+    recalls, uniq_ratio = [], []
+    for _, g in s.groupby(level="datetime"):
+        if len(g) < top_k:
+            continue
+        uniq_ratio.append(g.nunique() / len(g))
+        base = set(g.sort_values(ascending=False).head(top_k).index.get_level_values("instrument"))
+        worst = 1.0
+        for _ in range(_SHUFFLES):
+            shuffled = g.iloc[rng.permutation(len(g))]   # 값 불변, 행 순서만 교체
+            got = set(shuffled.sort_values(ascending=False)
+                      .head(top_k).index.get_level_values("instrument"))
+            worst = min(worst, len(base & got) / top_k)
+        recalls.append(worst)
+
+    if not recalls:
+        print(f"   ⚠️ [B 결정성] 계산 불가 — top{top_k}를 뽑을 수 있는 날이 없다.")
+        return True
+
+    r, u = pd.Series(recalls), pd.Series(uniq_ratio)
+    ok = r.min() >= 1.0
+    print(f"   {'✅' if ok else '❌'} [B 결정성] top{top_k} 재현율 "
+          f"중앙 {r.median():.3f} · 최소 {r.min():.3f} · 100%인 날 {(r == 1).mean():.1%} "
+          f"(고유값비율 중앙 {u.median():.3f}, {len(r)}일)")
+    if not ok:
+        n_bad = int((r < 1).sum())
+        print(f"      → 거래일 {n_bad}일({n_bad / len(r):.1%})에서 보유가 바뀐다. 그 날의 top{top_k}는 "
+              f"신호가 아니라 **입력 행 순서**가 정했다. 초과수익·IR은 그만큼 추첨 결과다.")
+    else:
+        print("      (참고: 이 게이트는 연속 출력 모델에서 원리상 발화하지 않는다. 통과 근거로 쓰지 말 것.)")
+    return ok

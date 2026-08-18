@@ -15,7 +15,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from _common import check_learning, load_config, qlib_init_kwargs  # qlib import 전(MLFLOW env 설정)
+from _common import (  # qlib import 전(MLFLOW env 설정)
+    check_learning, check_prediction_shape, load_config, qlib_init_kwargs,
+)
 
 import numpy as np
 import pandas as pd
@@ -133,6 +135,12 @@ def _gates(cfg: dict, market: str, dataset: DatasetH, recorder, model, evals_res
 
     print("\n" + "=" * 60 + "\n게이트 — 학습 (모델이 실제로 학습됐나)\n" + "=" * 60)
     passed.append(check_learning(cfg, model, evals_result))
+    # 게이트 B는 SignalRecord가 남긴 예측을 읽는다. 조회가 실패해도 학습 게이트 판정을
+    # 버리지 않는다 — B는 단방향이라 "못 돌렸다"가 통과도 실패도 아니다.
+    try:
+        passed.append(check_prediction_shape(cfg, recorder.load_object("pred.pkl")))
+    except Exception as exc:  # noqa: BLE001
+        print(f"   ⚠️ [B 결정성] pred.pkl 조회 실패({type(exc).__name__}) — 판정 보류")
 
     print("\n" + "=" * 60)
     if all(passed):

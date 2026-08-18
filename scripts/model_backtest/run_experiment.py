@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 
-from _common import check_learning, load_config, qlib_init_kwargs  # qlib import 전 MLFLOW env
+from _common import (  # qlib import 전 MLFLOW env
+    check_learning, check_prediction_shape, load_config, qlib_init_kwargs,
+)
 
 import qlib
 from qlib.utils import init_instance_by_config
@@ -62,6 +64,10 @@ def main() -> None:
 
         print("\n" + "=" * 60 + "\n게이트 — 학습 (모델이 실제로 학습됐나)\n" + "=" * 60)
         learned = check_learning(cfg, model, evals_result)
+        try:
+            learned = check_prediction_shape(cfg, rec.load_object("pred.pkl")) and learned
+        except Exception as exc:  # noqa: BLE001
+            print(f"   ⚠️ [B 결정성] pred.pkl 조회 실패({type(exc).__name__}) — 판정 보류")
 
         print("\n" + "=" * 60)
         print(f"피처 수: {feat.shape[1]}")
