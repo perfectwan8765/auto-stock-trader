@@ -9,13 +9,17 @@
 # 규칙 없는 노드는 즉시 드러난다.
 
 PY  := .venv/bin/python
+RUFF := .venv/bin/ruff
 DP  := scripts/data_pipeline
 TP  := scripts/toss_probe
 
-.PHONY: help test bundle-sp500 bundle-microcap check-dag clean-bundle
+.PHONY: help test lint lint-fix check-docrefs bundle-sp500 bundle-microcap check-dag clean-bundle
 
 help:
 	@echo "test             테스트 전량"
+	@echo "lint             주석·docstring 린트 (설정 근거는 pyproject.toml)"
+	@echo "lint-fix         린트 자동수정 가능분만 적용"
+	@echo "check-docrefs    주석·docstring이 가리키는 .md가 실재하는지 확인"
 	@echo "bundle-sp500     S&P500 qlib 번들 재빌드"
 	@echo "bundle-microcap  마이크로캡 qlib 번들 재빌드"
 	@echo "check-dag        선언된 데이터 노드에 규칙이 다 있는지 확인"
@@ -23,6 +27,29 @@ help:
 
 test:
 	$(PY) -m pytest tests/ -q
+
+# ------------------------------------------------------------------- 주석·docstring
+lint:
+	$(RUFF) check src scripts tests
+
+lint-fix:
+	$(RUFF) check --fix src scripts tests
+
+# 주석 속 파일명은 산문이라 문서를 개명해도 따라오지 않는다 — 실제로 5곳이 끊겨 있었다
+# (커밋 8f5f135). 마크다운 링크와 달리 린터가 잡지 않으므로(ruff 969개 규칙 중 없음) 직접 본다.
+#
+# docs/plans/·docs/findings/를 일부러 후보에서 뺐다. 그쪽은 추적 밖이라 로컬에서는 통과하고
+# 클론에서만 실패한다 — check-dag가 기록한 것과 같은 함정이다. 여기서는 추적 밖 문서를
+# 가리키는 것 자체를 위반으로 취급한다.
+check-docrefs:
+	@grep -rno '[A-Za-z0-9_./-]*\.md' --include='*.py' src scripts tests \
+	  | { fail=0; \
+	      while IFS=: read -r f l ref; do \
+	        test -f "$$ref" -o -f "docs/project/$$ref" -o -f "docs/research/$$ref" \
+	          || { echo "죽은 문서 참조: $$f:$$l -> $$ref"; fail=1; }; \
+	      done; \
+	      test $$fail -eq 0 && echo "✅ 문서 참조 전량 해소"; \
+	      exit $$fail; }
 
 # ---------------------------------------------------------------- qlib 번들
 # QLIB_UNIVERSE/QLIB_DATASET 조합은 _common.py 주석에만 있던 암묵지다. 타깃으로 승격한다.

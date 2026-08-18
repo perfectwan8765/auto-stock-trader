@@ -39,3 +39,8 @@ altair==6.2.2
 # src/toss 단위테스트(mock 응답). 개선10/13 예외·redact 회귀 방지.
 pytest==9.1.1
 bidask==2.1.0                 # EDGE 스프레드 추정량 (단계 1(j) 주 추정량)
+
+# --- 린트 ---
+# 주석·docstring 규율. 설정과 ignore 근거는 pyproject.toml,
+# 규칙 선택의 1차 출처는 docs/research/python-comments.md §5.5.
+ruff==0.16.3
