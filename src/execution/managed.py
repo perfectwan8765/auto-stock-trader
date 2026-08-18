@@ -22,6 +22,13 @@ from .errors import ExecutionError
 
 @dataclass
 class ManagedState:
+    """봇이 건드려도 되는 종목(M)과 사용자 수동 보유(X)를 가른다.
+
+    첫 실행이 계좌의 현재 보유를 전부 X로 동결하고(`bootstrapped`), 그 뒤 봇이 산 것만
+    M에 들어온다. X는 목표에 없어도 팔지 않고 목표에 있어도 사지 않는다 — 사용자 자산을
+    봇이 청산하는 것을 막는 유일한 장치다.
+    """
+
     excluded: set[str] = field(default_factory=set)   # X: 수동 보유 (봇 비관리)
     managed: set[str] = field(default_factory=set)     # M: 봇 보유
     bootstrapped: bool = False
@@ -52,6 +59,7 @@ class ManagedState:
         )
 
     def save(self) -> None:
+        """`path`가 있으면 원자적으로 쓴다. 인메모리(`path=None`)면 아무것도 하지 않는다."""
         if self.path is None:
             return
         write_text_atomic(self.path, json.dumps({

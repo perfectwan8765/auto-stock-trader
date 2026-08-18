@@ -38,6 +38,13 @@ from .rebalance import compute_rebalance
 from .safety import CircuitBreaker, check_kill_switch
 
 class RebalanceRunner:
+    """계획 계산과 실발주 사이의 모든 안전장치를 배선한다.
+
+    `compute_rebalance`가 순수 계산이고 `Broker`가 브로커 고유 부분이라면, 여기는 그
+    사이에 kill switch·서킷브레이커·관리셋 보호·매도가능수량 clamp를 끼우는 층이다.
+    dry-run과 실발주의 유일한 분기점도 여기다.
+    """
+
     def __init__(
         self,
         broker: Broker,
@@ -48,6 +55,16 @@ class RebalanceRunner:
         circuit_breaker: CircuitBreaker | None = None,
         log_dir: str | None = None,
     ):
+        """협력자를 받는다. 안전장치는 전부 선택이며, 넘기지 않으면 그 보호가 없다.
+
+        Args:
+            broker: 발주·조회 어댑터.
+            policy: 이 실행에 적용할 정책. 실행 로그에 그대로 직렬화된다.
+            managed_state: 봇 관리셋. 생략하면 인메모리라 다음 실행이 보호를 잃는다.
+            kill_switch_path: 이 파일이 있으면 발주하지 않는다. 생략하면 검사하지 않는다.
+            circuit_breaker: 일일 주문건수·손실 상한. 생략하면 상한이 없다.
+            log_dir: 실발주 결과를 남길 디렉터리(대시보드 소스). 생략하면 남기지 않는다.
+        """
         self.broker = broker
         self.policy = policy
         self.state = managed_state if managed_state is not None else ManagedState(path=None)
@@ -219,6 +236,20 @@ class RebalanceRunner:
             write_order_log(result, rebalance_date, Path(self.log_dir))
 
     def run(self, target_weights: dict[str, float], rebalance_date: str, dry_run: bool = True) -> RunResult:
+        """계획을 세우고, `dry_run=False`면 발주한다.
+
+        Args:
+            target_weights: 심볼 → 목표 비중.
+            rebalance_date: YYYYMMDD. 멱등키와 서킷브레이커 day 키의 근거이므로
+                **미국 거래일**을 넘겨야 한다(로컬 날짜가 아니다).
+            dry_run: True면 발주도 상태 저장도 하지 않는다 — 오프라인 프리뷰가 라이브
+                부트스트랩을 오염시키지 않게 하려는 것이다.
+
+        Raises:
+            KillSwitchActive: kill switch 파일 존재.
+            CircuitBreakerTripped: 일일 상한 초과.
+            ExecutionError: 보유 종목 가격 누락 등 예산 계산 불가.
+        """
         self._snapshot: dict | None = None
         self._account: AccountSnapshot | None = None
         plan = self._build_plan(target_weights, rebalance_date, dry_run)

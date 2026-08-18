@@ -22,6 +22,12 @@ class OrderIntent:
 
 @dataclass(frozen=True)
 class RebalanceParams:
+    """`compute_rebalance` 한 번의 입력 중 종목에 딸리지 않는 것들.
+
+    금액은 전부 USD다. 한 실행 안에서 이 값들이 흔들리면 예산 계산이 어긋나므로
+    러너가 사이클 시작에 한 번 읽어 고정한다.
+    """
+
     total_equity_usd: float   # 총 평가액(목표 비중 → 금액 환산 기준)
     buying_power_usd: float   # 매수는 이 한도 내에서만(이번 사이클 매도대금 미포함)
     min_order_usd: float      # 최소 주문금액
@@ -124,12 +130,41 @@ class Broker(Protocol):
     해석하지 않게 하려는 것이다(그러면 두 번째 어댑터를 붙일 때 러너를 고쳐야 한다).
     """
 
-    def snapshot(self, target_symbols: list[str]) -> AccountSnapshot: ...
-    # T+N 미결제분을 제외한 매도가능수량.
-    # ⚠️ **값을 알 수 없는 심볼은 결과에 키를 넣지 않는다.** 0으로 채우면 러너가 "미결제라
-    # 못 판다"로 읽어 매도를 조용히 버리고 매 사이클 반복한다. 러너의 미조회 중단 가드가
-    # 이 계약에 의존하므로, 지키지 않는 구현은 가드를 죽은 코드로 만든다(무음 회귀).
-    def get_sellable(self, symbols: list[str]) -> dict[str, float]: ...
-    def is_market_open(self) -> bool: ...
-    def place(self, intent: OrderIntent) -> str: ...         # 실발주(멱등키 포함) → 주문 ID
-    def get_fill(self, order_id: str) -> Fill | None: ...    # 체결 실측. 미체결·미지원이면 None
+    def snapshot(self, target_symbols: list[str]) -> AccountSnapshot:
+        """보유·가격·예수금·당일손익을 한 시점에서 함께 읽는다.
+
+        시점이 섞이면 예산 계산이 흔들리므로 러너는 한 실행에 한 번만 부른다.
+
+        Args:
+            target_symbols: 목표 포트폴리오의 심볼. 보유에 없어도 가격은 필요하다.
+        """
+        ...
+
+    def get_sellable(self, symbols: list[str]) -> dict[str, float]:
+        """T+N 미결제분을 제외한 매도가능수량.
+
+        ⚠️ **값을 알 수 없는 심볼은 결과에 키를 넣지 않는다.** 0으로 채우면 러너가 "미결제라
+        못 판다"로 읽어 매도를 조용히 버리고 매 사이클 반복한다. 러너의 미조회 중단 가드가
+        이 계약에 의존하므로, 지키지 않는 구현은 가드를 죽은 코드로 만든다(무음 회귀).
+        """
+        ...
+
+    def is_market_open(self) -> bool:
+        """정규장 중인가. 판정 불가면 보수적으로 닫힘을 답해야 한다."""
+        ...
+
+    def place(self, intent: OrderIntent) -> str:
+        """실발주하고 브로커 주문 ID를 돌려준다.
+
+        `intent.client_order_id`가 멱등키다 — 같은 키로 두 번 부르면 브로커가 거른다.
+
+        Raises:
+            OrderRejected: 이 주문만 거부(잔액 부족·미취급 종목 등).
+            BrokerMarketClosed: 장 마감. 러너가 잔여 주문을 중단한다.
+            BrokerRateLimited: rate-limit 초과.
+        """
+        ...
+
+    def get_fill(self, order_id: str) -> Fill | None:
+        """체결 실측(슬리피지 계산 입력). 미체결·미지원이면 None."""
+        ...

@@ -15,6 +15,8 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 @dataclass(frozen=True)
 class Config:
+    """`.env`에서 읽은 토스 OpenAPI 접속 설정."""
+
     client_id: str
     client_secret: str
     base_url: str
@@ -22,6 +24,7 @@ class Config:
 
     @property
     def has_account(self) -> bool:
+        """계좌식별자가 채워졌는가. ACCOUNT 그룹 API 호출 가능 여부와 같다."""
         return bool(self.account)
 
 

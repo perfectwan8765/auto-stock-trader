@@ -34,7 +34,19 @@ def _oauth_error_detail(resp: requests.Response) -> str:
 
 
 class TokenManager:
+    """OAuth client_credentials 토큰을 발급·캐시한다.
+
+    캐시는 `expires_in` 기준으로만 유효를 판단한다 — 만료를 모르는 토큰은 캐시하지 않고,
+    이미 있던 항목도 지운다. 파일은 만들어지는 순간부터 소유자 전용(0600)이다.
+    """
+
     def __init__(self, cfg: Config, cache_path: Path = _CACHE_PATH):
+        """네트워크를 건드리지 않는다. 발급은 `get_token` 첫 호출에서 일어난다.
+
+        Args:
+            cfg: `client_id`·`client_secret`·`base_url`을 담은 설정.
+            cache_path: 토큰 캐시 파일. 다른 자격증명으로 발급된 항목은 무시된다.
+        """
         self.cfg = cfg
         self.cache_path = cache_path
 
@@ -107,6 +119,14 @@ class TokenManager:
         return token, expires_in
 
     def get_token(self, force_refresh: bool = False) -> str:
+        """유효한 access token을 돌려준다. 캐시가 살아 있으면 재발급하지 않는다.
+
+        Args:
+            force_refresh: 캐시를 무시하고 새로 발급받는다. 401 재시도 경로가 쓴다.
+
+        Raises:
+            TossAuthError: 발급 실패 또는 응답에 `access_token` 없음.
+        """
         if not force_refresh:
             cached = self._read_cache()
             if cached:

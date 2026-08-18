@@ -29,6 +29,14 @@ class TossApiError(TossError):
     """
 
     def __init__(self, method: str, path: str, status: int, body: Any):
+        """중첩·flat 두 형태에서 `code`·`message`만 뽑아 메시지를 만든다.
+
+        Args:
+            method: 실패한 요청의 HTTP 메서드.
+            path: 실패한 요청 경로.
+            status: HTTP 상태코드. `self.status`로도 노출한다.
+            body: 파싱된 응답 본문(비-JSON이면 문자열). `self.body`로 원문 보존.
+        """
         self.status = status
         self.body = body
         code, msg = "", ""

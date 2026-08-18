@@ -203,6 +203,8 @@ def log_selection(experiment_name: str, sweep: str, ranking, picked: str, criter
     이중계상이다(trial-ledger.md 층② 규칙).
 
     Args:
+        experiment_name: 기록할 qlib 실험 이름. 시행 런과 같은 실험에 넣어야 짝이 보인다.
+        sweep: 이 선택이 속한 스윕 ID. `sweep_id` param으로 남아 시행 런과 묶인다.
         ranking: 후보 이름을 선택 기준 내림차순으로 담은 순서열.
         picked: 실제로 고른 후보.
         criterion: 무엇을 기준으로 골랐는가(예: `"valid_RankIC"`).

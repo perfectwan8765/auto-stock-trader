@@ -50,6 +50,17 @@ class CircuitBreaker:
 
     def __init__(self, max_orders_per_day: int, max_loss_usd: float,
                  path: str | Path | None = None, day: str | None = None):
+        """상태 파일이 있으면 같은 `day`의 카운터를 이어받는다.
+
+        Args:
+            max_orders_per_day: 매수·매도 합산 주문건수 상한.
+            max_loss_usd: 당일손실 상한. 워터마크와 실현손실의 **합**과 비교한다.
+            path: 카운터를 남길 파일. 생략하면 인메모리 — 재기동만으로 상한이 리셋된다.
+            day: 카운터를 묶는 키. **미국 거래일**을 넘겨야 한다(E10).
+
+        Raises:
+            CircuitBreakerTripped: 복원한 손실이 이미 상한 이상.
+        """
         self.max_orders_per_day = max_orders_per_day
         self.max_loss_usd = max_loss_usd
         self.orders_today = 0
@@ -120,6 +131,7 @@ class CircuitBreaker:
             )
 
     def record_order(self) -> None:
+        """주문 1건을 세고 즉시 파일로 flush한다. 루프 중간에 죽어도 상한이 우회되지 않는다."""
         self.orders_today += 1
         self._persist()   # 주문마다 flush — 루프 중간에 죽어도 재시작이 상한을 우회 못 한다
 

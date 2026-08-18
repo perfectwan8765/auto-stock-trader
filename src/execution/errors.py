@@ -35,5 +35,11 @@ class OrderRejected(ExecutionError):
     """
 
     def __init__(self, code: str = "", message: str = ""):
+        """둘 다 비면 기본 메시지로 떨어진다.
+
+        Args:
+            code: 어댑터가 준 원본 사유 문자열. `self.code`로 보존해 기록에만 쓴다.
+            message: 사람이 읽을 메시지. 비면 `code`, 그것도 비면 `"주문 거부"`.
+        """
         self.code = code
         super().__init__(message or code or "주문 거부")

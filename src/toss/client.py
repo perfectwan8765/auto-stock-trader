@@ -16,7 +16,18 @@ from .errors import TossApiError, TossConfigError  # noqa: F401  (TossApiError r
 
 
 class TossClient:
+    """토스 OpenAPI HTTP 호출. 인증 헤더·계좌 헤더 부착과 401 재시도만 담당한다.
+
+    응답 스키마 해석은 하지 않는다 — 그건 `TossBroker`의 일이다.
+    """
+
     def __init__(self, cfg: Config, token_manager: TokenManager | None = None):
+        """세션을 열지만 토큰은 아직 받지 않는다 — 첫 요청에서 받는다.
+
+        Args:
+            cfg: 접속 설정.
+            token_manager: 토큰 관리자. 생략하면 `cfg`로 새로 만든다.
+        """
         self.cfg = cfg
         self.tokens = token_manager or TokenManager(cfg)
         self.session = requests.Session()
@@ -47,6 +58,26 @@ class TossClient:
         _retry: bool = False,
         _token: str | None = None,
     ) -> Any:
+        """요청 1회. 401이면 토큰을 강제 재발급해 **1회만** 재시도한다.
+
+        Args:
+            method: HTTP 메서드.
+            path: `base_url` 뒤에 붙는 경로.
+            need_account: 계좌 헤더가 필요한 API인가. MARKET_DATA·STOCK 그룹은 False.
+            params: 쿼리 문자열.
+            json_body: 요청 본문.
+            timeout: 초 단위 타임아웃.
+            _retry: 내부용 — 재시도 상한 표시. 호출부가 넘기지 않는다.
+            _token: 내부용 — 재발급한 토큰을 직접 전달한다. 캐시를 다시 읽으면 거부된
+                옛 토큰이 돌아올 수 있기 때문이다.
+
+        Returns:
+            파싱된 JSON. 본문이 JSON이 아니면 원문 문자열.
+
+        Raises:
+            TossApiError: 2xx가 아닌 응답.
+            TossConfigError: 계좌 헤더가 필요한데 `TOSS_ACCOUNT`가 비었을 때.
+        """
         url = f"{self.cfg.base_url}{path}"
         resp = self.session.request(
             method,
@@ -78,9 +109,11 @@ class TossClient:
         return body
 
     def get(self, path: str, **kw) -> Any:
+        """`request("GET", ...)` 단축. 키워드 인자는 그대로 전달된다."""
         return self.request("GET", path, **kw)
 
     def post(self, path: str, **kw) -> Any:
+        """`request("POST", ...)` 단축. 키워드 인자는 그대로 전달된다."""
         return self.request("POST", path, **kw)
 
     def rate_limit_headers(self) -> dict[str, str]:

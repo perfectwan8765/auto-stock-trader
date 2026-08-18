@@ -34,6 +34,22 @@ def compute_rebalance(
     prices: dict[str, float],
     params: RebalanceParams,
 ) -> RebalancePlan:
+    """목표 비중과 현재 보유의 차이를 발주 계획으로 바꾼다. 계산만 하고 발주하지 않는다.
+
+    규약은 모듈 docstring에 있다. 매도가 앞에 서고, 매수는 `params.buying_power_usd`
+    안에서만 배분되며, 밴드 안이거나 최소금액 미달인 종목은 사유와 함께 `skipped`로 간다.
+
+    Args:
+        target_weights: 심볼 → 목표 비중. 0 이하는 편출로 읽는다. 합이 1일 필요는 없다.
+        holdings: 심볼 → 현재 보유 수량. 봇 관리분만 넘겨야 한다.
+        prices: 심볼 → 결정 시점 가격. **누락은 0으로 읽힌다** — 보유 평가액이 0이 되어
+            trim이 막히고 매수는 목표 전액이 나간다. 러너가 사전에 중단시키므로
+            (`runner.py`의 보유 종목 가격 누락 가드) 이 함수는 방어하지 않는다.
+        params: 총 평가액·가용 현금·밴드 등 종목에 딸리지 않는 입력.
+
+    Returns:
+        실행 순서대로 담긴 `orders` 와 무동작 사유 `skipped` 를 가진 `RebalancePlan`.
+    """
     orders: list[OrderIntent] = []
     skipped: list[tuple[str, str]] = []
 
