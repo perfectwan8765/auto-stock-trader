@@ -22,6 +22,7 @@ help:
 	@echo "check-docrefs    주석·docstring이 가리키는 .md가 실재하는지 확인"
 	@echo "bundle-sp500     S&P500 qlib 번들 재빌드"
 	@echo "bundle-microcap  마이크로캡 qlib 번들 재빌드"
+	@echo "bundle-etp       매크로 ETF 번들 재빌드 (2003~)"
 	@echo "check-dag        선언된 데이터 노드에 규칙이 다 있는지 확인"
 	@echo "<파일경로>       해당 산출물과 그 선행만 생성 (예: make data/events_addv.csv)"
 
@@ -59,8 +60,13 @@ bundle-sp500:
 bundle-microcap:
 	QLIB_UNIVERSE=microcap_tradable.txt QLIB_DATASET=_small $(PY) $(DP)/run_pipeline.py
 
+# 매크로 ETF 번들. 상장일이 SPY 1993이라 START_DATE(2015)보다 훨씬 이전부터 받는다 —
+# MinBTL 시행 예산이 OOS 길이의 함수이므로 표본 길이 자체가 검정력이다.
+bundle-etp:
+	QLIB_UNIVERSE=etp_macro.txt QLIB_DATASET=_etp $(PY) $(DP)/run_pipeline.py --start 2003-01-01
+
 clean-bundle:
-	rm -rf data/qlib_us data/qlib_us_small
+	rm -rf data/qlib_us data/qlib_us_small data/qlib_us_etp
 
 # ---------------------------------------------------------- Edge v2 데이터 DAG
 DAG_NODES := \

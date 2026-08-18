@@ -28,11 +28,16 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--symbols", nargs="*")
     ap.add_argument("--skip-collect", action="store_true", help="수집 생략, raw로 재빌드만")
+    # 01_collect에는 --start가 있는데 오케스트레이터가 넘기지 않아, 기본 2015 이전으로
+    # 내리려면 4단계를 손으로 돌려야 했다. ETF는 2003년부터 받을 수 있어 필요해졌다.
+    ap.add_argument("--start", default=None, help="수집 시작일(생략 시 _common.START_DATE)")
     args = ap.parse_args()
 
     collect_extra = []
     if args.symbols:
         collect_extra += ["--symbols", *args.symbols]
+    if args.start:
+        collect_extra += ["--start", args.start]
 
     for step in STEPS:
         if step == "01_collect.py":
