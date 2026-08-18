@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "data_pipeline"))
 
-from _common import stale_symbols  # noqa: E402
+from _common import stale_symbols
 
 
 def _report(**symbols: str) -> dict:

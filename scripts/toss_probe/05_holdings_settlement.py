@@ -4,7 +4,7 @@
 용도 2) 결제주기 관찰:   소액 매도 직후 이 스크립트를 날짜별로 반복 실행하며
         buying-power(USD 가용액) 반영 시점을 기록 → 매도대금이 며칠 뒤 매수가능해지는지(T+N) 확인.
 """
-import _bootstrap  # noqa: F401
+import _bootstrap
 
 import json
 import time

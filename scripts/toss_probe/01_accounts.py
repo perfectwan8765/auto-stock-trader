@@ -4,7 +4,7 @@
 결과:  응답에서 계좌식별자를 찾아 .env의 TOSS_ACCOUNT에 채운다.
 검증:  이후 holdings 200 반환 (05_holdings.py)
 """
-import _bootstrap  # noqa: F401
+import _bootstrap
 
 import json
 

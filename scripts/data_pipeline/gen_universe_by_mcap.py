@@ -26,10 +26,10 @@ import warnings
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
-import pandas as pd
+import pandas as pd  # noqa: E402  (filterwarnings가 import 시점 경고를 먼저 막아야 한다)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV, EVENTS_MCAP_CSV, write_csv_atomic
+from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV, EVENTS_MCAP_CSV  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 EVENTS = EVENTS_CSV

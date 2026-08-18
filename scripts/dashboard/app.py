@@ -200,7 +200,7 @@ def fetch_krw_rate(date_str: str) -> float | None:
         asof = h[h.index.tz_localize(None) <= d]  # 종료일 이하 마지막 종가
         s = asof if not asof.empty else h
         return float(s["Close"].iloc[-1])
-    except Exception:
+    except Exception:  # noqa: BLE001 — yfinance 스크래퍼 예외가 대시보드를 죽이면 안 된다
         return None
 
 

@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "data_pipeline"))
-import _common  # noqa: E402
+import _common
 
 
 def test_write_csv_atomic_keeps_old_file_on_failure(tmp_path, monkeypatch):

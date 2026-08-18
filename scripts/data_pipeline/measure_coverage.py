@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV, TOSS_META_CSV  # noqa: E402
+from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV, TOSS_META_CSV
 
 ROOT = Path(__file__).resolve().parents[2]
 EVENTS = EVENTS_CSV

@@ -22,7 +22,7 @@ from bidask import edge_rolling
 from spread_estimators import abdi_ranaldo, corwin_schultz
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import write_csv_atomic  # noqa: E402
+from _common import write_csv_atomic
 
 ROOT = Path(__file__).resolve().parents[2]
 ADDV = ROOT / "data" / "events_addv.csv"

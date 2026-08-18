@@ -15,7 +15,7 @@
 옵션:  --limit 300   (후보 상위 N개만 조회)   --batch 20
 전제:  universe/microcap_candidates.txt (gen_microcap_candidates.py로 생성)
 """
-import _bootstrap  # noqa: F401
+import _bootstrap
 
 import argparse
 import collections

@@ -17,7 +17,7 @@
   # 2) 정규장 시간에 실제 발주
   python scripts/toss_probe/04_place_test_order.py --symbol AAPL --amount 1 --confirm
 """
-import _bootstrap  # noqa: F401
+import _bootstrap
 
 import argparse
 import hashlib

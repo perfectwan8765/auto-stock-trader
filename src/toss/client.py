@@ -12,7 +12,9 @@ import requests
 
 from .auth import TokenManager
 from .config import Config
-from .errors import TossApiError, TossConfigError  # noqa: F401  (TossApiError re-export: 기존 import 호환)
+# TossApiError는 여기서도 쓰지만(2xx 아닌 응답) toss_probe 4개가 `toss.client` 경유로
+# 가져간다 — 지역 import로 내리면 그쪽이 깨진다.
+from .errors import TossApiError, TossConfigError
 
 
 class TossClient:

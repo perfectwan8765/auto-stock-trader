@@ -18,7 +18,7 @@ import pandas as pd
 import yfinance as yf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import write_csv_atomic  # noqa: E402
+from _common import write_csv_atomic
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_BENCH = ROOT / "data" / "benchmarks.csv"

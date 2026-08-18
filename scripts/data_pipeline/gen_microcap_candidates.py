@@ -32,7 +32,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import EVENTS_CSV  # noqa: E402
+from _common import EVENTS_CSV
 
 ROOT = Path(__file__).resolve().parents[2]
 DERA_DIR = ROOT / "data" / "dera"

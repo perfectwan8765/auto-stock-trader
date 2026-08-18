@@ -19,7 +19,7 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import EVENTS_CSV  # noqa: E402
+from _common import EVENTS_CSV
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "issuer_sic.csv"

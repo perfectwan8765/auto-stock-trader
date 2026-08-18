@@ -21,7 +21,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import write_csv_atomic  # noqa: E402
+from _common import write_csv_atomic
 
 ROOT = Path(__file__).resolve().parents[2]
 DERA = ROOT / "data" / "dera"

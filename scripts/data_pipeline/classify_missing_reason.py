@@ -31,7 +31,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import CANDIDATE_CLOSES_CSV  # noqa: E402
+from _common import CANDIDATE_CLOSES_CSV
 
 ROOT = Path(__file__).resolve().parents[2]
 CANDIDATES_CSV = ROOT / "universe" / "microcap_candidates.csv"

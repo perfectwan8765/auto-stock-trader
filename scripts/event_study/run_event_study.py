@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_panel import judged_population, load_factors, load_prices, load_sic  # noqa: E402
+from build_panel import judged_population, load_factors, load_prices, load_sic
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "event_study_bhar.csv"

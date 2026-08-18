@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import CANDIDATE_CLOSES_CSV  # noqa: E402
+from _common import CANDIDATE_CLOSES_CSV
 
 ROOT = Path(__file__).resolve().parents[2]
 CLOSES = CANDIDATE_CLOSES_CSV
