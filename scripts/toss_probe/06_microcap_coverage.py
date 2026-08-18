@@ -152,7 +152,7 @@ def main() -> None:
 
     print(f"\n{'='*60}\nUSD 매수가능액: ${broker.get_buying_power_usd():,.2f}")
     print(f"rate-limit 헤더: {client.rate_limit_headers()}")
-    print("\n👉 결과를 phase0b-execution-gate.md에 기록.")
+    print("\n👉 결과를 docs/project/roadmap.md §Phase 0 실측 상수에 기록.")
     print("   (c)최소수수료 · (d)지정가/정수주 지원은 실주문 필요 — 별도 승인 후 진행.")
 
 

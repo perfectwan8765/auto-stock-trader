@@ -22,7 +22,8 @@ def main() -> None:
     print(json.dumps(accounts, indent=2, ensure_ascii=False))
     print(
         "\n👉 위 응답에서 계좌식별자(계좌번호/식별키)를 찾아 .env의 TOSS_ACCOUNT에 넣으세요."
-        "\n   실측 확정값은 accountNo가 아니라 accountSeq (qlib-toss.md §Phase 0 실측 상수)."
+        "\n   실측 확정값은 accountNo가 아니라 accountSeq"
+        " (docs/project/roadmap.md §Phase 0 실측 상수)."
     )
 
 

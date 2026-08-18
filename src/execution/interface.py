@@ -28,7 +28,8 @@ class RebalanceParams:
     rebalance_date: str       # YYYYMMDD, 멱등키 재현용
     # no-trade 밴드: 목표 대비 |편차|/목표 가 이 값 이하면 거래하지 않는다.
     # min_order_usd는 집행 하한이지 정책이 아니다 — 실측값이 $1이라 이것만 쓰면
-    # 포트폴리오의 0.14% 드리프트에도 주문이 나간다. 근거는 qlib-toss.md Phase 5.5.
+    # 포트폴리오의 0.14% 드리프트에도 주문이 나간다.
+    # 근거는 docs/project/roadmap.md Phase 5.5 — 그 표가 점검 주기와 변경 조건도 정한다.
     rebalance_band: float = 0.10
 
 

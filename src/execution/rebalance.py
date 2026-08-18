@@ -1,6 +1,6 @@
 """목표 비중 → 발주 계획 계산 (브로커 비의존, 순수 함수).
 
-규약(qlib-toss.md Phase 5):
+규약(docs/project/roadmap.md Phase 5):
 - 개선1 자금순환(T+N): 매수는 **현재 가용 USD 한도** 내에서만. 이번 사이클 매도대금은 T+N로
   즉시 안 잡힐 수 있어 매수 예산에 포함하지 않는다(보수적). 초과분은 다음 사이클로 이월.
 - 개선5 결정적 멱등키: clientOrderId = hash(리밸일자+symbol+side+금액). 재시도·크래시 재개 시 동일.
@@ -8,7 +8,7 @@
 - 매도先→매수 순서(자금 확보). 매도 대상: 편출(exit) 전량 + 초과보유(trim).
 - no-trade 밴드: 목표 대비 편차가 `rebalance_band` 이내면 거래하지 않는다. Vanguard의
   1926–2018 표에서 연 10% 임계(14회)와 월 0% 임계(1,116회)의 수익률이 8.20%로 같았다 —
-  회전만 80배다. 상세·출처는 qlib-toss.md Phase 5.5.
+  회전만 80배다. 상세·출처는 docs/project/roadmap.md Phase 5.5.
 """
 from __future__ import annotations
 
