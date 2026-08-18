@@ -35,3 +35,121 @@ def qlib_init_kwargs(cfg: dict) -> tuple[dict, Path]:
     provider_uri = ROOT / kw["provider_uri"]
     kw["provider_uri"] = str(provider_uri)
     return kw, provider_uri
+
+
+# ------------------------------------------------------- 학습 건전성 게이트 (게이트 A)
+
+# CSRankNorm 라벨에 대한 **상수 예측의 MSE**. 이 값은 데이터가 필요 없다 —
+# CSRankNorm이 `rank(pct=True) → -0.5 → ×3.46`이므로 출력 분산이 종목수·기간·시장과
+# 무관하게 정해진다(3.46 = 1/std[uniform], qlib CSRankNorm docstring).
+#   Var = 3.46² / 12 = 0.9976333…   (test 구간 label.pkl 실측 0.9976316)
+# 곧 "아무것도 학습하지 않은 모델"의 검증손실을 미리 알 수 있고, 게이트 비용이 0이다.
+NULL_MSE_CSRANKNORM = 3.46**2 / 12
+
+# 모델별 검증지표 규약: 모델클래스 → (지표가 클수록 좋은가, 지표값 → MSE 변환).
+# ★ 이 표가 있어야 하는 이유는 **부호가 모델마다 반대**라는 것이다 — LightGBM은 `l2`에
+#   MSE를 그대로 담고(작을수록 좋음), qlib pytorch 모델은 metric_fn이 `-loss_fn`을 반환해
+#   음수 MSE를 담는다(클수록 좋음). 최선점을 min으로 찾으면 GRU는 정확히 거꾸로 읽힌다.
+#   모델을 추가할 때마다 밟을 함정이므로 규약을 여기 한 곳에 선언한다.
+_VALID_METRIC = {
+    "LGBModel": (False, lambda v: v),
+    "GRU": (True, lambda v: -v),
+}
+
+
+def valid_curve(model, evals_result: dict) -> list[float]:
+    """검증곡선을 **MSE 단위·작을수록 좋은 방향**으로 정규화해 돌려준다.
+
+    모델별 부호 규약을 여기서 흡수하는 것이 요점이다 — 호출부가 min/max를 고르게 하면
+    모델을 추가할 때마다 그 선택을 다시 해야 하고, 틀려도 조용히 통과한다.
+
+    Raises:
+        SystemExit: 모델 규약 미등록·곡선 없음. **추측하지 않는다.**
+    """
+    name = type(model).__name__
+    if name not in _VALID_METRIC:
+        raise SystemExit(
+            f"[게이트 중단] 모델 '{name}'의 검증지표 부호 규약이 미등록이다.\n"
+            f"  _common.py의 _VALID_METRIC에 (클수록 좋은가, MSE 변환)을 추가할 것.\n"
+            f"  추측으로 통과시키면 부호를 거꾸로 읽어도 조용히 PASS가 된다."
+        )
+    _, to_mse = _VALID_METRIC[name]
+
+    curve = evals_result.get("valid")
+    if isinstance(curve, dict):  # LightGBM: 지표명으로 한 겹 더 감싼다
+        if len(curve) != 1:
+            raise SystemExit(f"[게이트 중단] valid 지표가 {list(curve)} — 1개여야 한다")
+        curve = next(iter(curve.values()))
+    if not curve:
+        raise SystemExit(
+            "[게이트 중단] 검증곡선이 비었다. valid 세그먼트가 있는지, "
+            "model.fit(dataset, evals_result=...)로 받았는지 확인할 것."
+        )
+    return [to_mse(v) for v in curve]
+
+
+def best_valid_mse(model, evals_result: dict) -> tuple[float, int]:
+    """검증 MSE의 최선값과 그 스텝. 모델별 부호 규약을 여기서 흡수한다.
+
+    Args:
+        model: 학습이 끝난 qlib 모델 인스턴스. 클래스명으로 규약을 찾는다.
+        evals_result: `model.fit(dataset, evals_result=...)`로 받은 학습곡선.
+            LightGBM은 `{"valid": {"l2": [...]}}`, qlib pytorch는 `{"valid": [...]}`.
+
+    Returns:
+        (최선 검증 MSE, 그 스텝 인덱스).
+
+    Raises:
+        SystemExit: 모델 규약이 미등록이거나 곡선이 비었을 때. **추측하지 않는다** —
+            부호를 잘못 읽은 게이트는 게이트가 없는 것보다 나쁘다.
+    """
+    curve = valid_curve(model, evals_result)
+    best = min(curve)                      # 정규화 후에는 항상 작을수록 좋다
+    return best, curve.index(best)
+
+
+def check_learning(cfg: dict, model, evals_result: dict) -> bool:
+    """학습 게이트 — 모델이 실제로 학습됐는가. 두 축을 따로 본다.
+
+    기존 배선 게이트가 "설정이 의도대로 배선됐나"를 보는 것과 달리 이쪽은 "학습이 됐나"를
+    본다. **IC로는 대체되지 않는다** — 상수 예측도 유한한 IC를 내므로 배선 게이트를 통과한다.
+
+    두 축이 필요한 이유:
+
+    - **A (수준)** — 검증손실이 null 기준선보다 나은가. 임계는 `R² > 0`뿐이다. 문헌은
+      "null보다 나아야 한다"까지만 말하고 구체적 하한을 주지 않으므로 값을 정하면 그 자체가
+      연구자 자유도가 된다. 유의성으로 올리려면 Diebold-Mariano류가 필요한데 "학습모델 vs
+      상수예측"은 **중첩 모델**이라 정규근사가 성립하지 않는다(Diebold 2015). 따라서 A가
+      말할 수 있는 것은 `≤ 0`이면 실패, `> 0`이면 **"실패는 아님"** 까지다.
+    - **C (진행)** — 최선 스텝이 0이면 첫 반복 이후 모든 반복이 검증을 악화시켰다는 뜻이고,
+      그건 학습이 진행되지 않았다는 것이다. **임계가 필요 없어** A의 자유도 문제를 겪지 않는다.
+      A는 수준이 null 근처(R² ~1e-5)여도 통과하므로 이 축이 없으면 게이트가 아무것도 못 막는다.
+
+    ⚠️ C는 반복학습기(GBDT·NN)에만 적용된다 — 선형회귀엔 학습곡선이 없다. `_VALID_METRIC`이
+    미등록 모델에서 중단하므로 그 범위를 벗어나면 조용히 통과하는 일은 없다.
+    """
+    procs = cfg["task"]["dataset"]["kwargs"]["handler"]["kwargs"].get("learn_processors", [])
+    if not any(p.get("class") == "CSRankNorm" for p in procs if isinstance(p, dict)):
+        raise SystemExit(
+            "[게이트 중단] learn_processors에 CSRankNorm이 없다 → NULL_MSE 상수가 성립하지 않는다.\n"
+            "  라벨 정규화를 바꿨다면 null 기준선을 학습 라벨 분산으로 직접 재계산할 것."
+        )
+
+    curve = valid_curve(model, evals_result)
+    mse, step = min(curve), curve.index(min(curve))
+    r2 = 1 - mse / NULL_MSE_CSRANKNORM
+
+    ok_a = r2 > 0
+    print(f"   {'✅' if ok_a else '❌'} [A 수준] null 대비: R²_oos={r2:+.5f} "
+          f"(검증MSE {mse:.6f} vs null {NULL_MSE_CSRANKNORM:.6f})")
+    if not ok_a:
+        print("      → 상수 예측보다 나쁘다. IC가 양수여도 신호가 아니라 동점 처리 결과일 수 있다.")
+
+    ok_c = step > 0
+    gain = curve[0] - mse
+    print(f"   {'✅' if ok_c else '❌'} [C 진행] 최선 step={step}/{len(curve) - 1} "
+          f"· 개선폭 {gain:.2e} ({gain / NULL_MSE_CSRANKNORM:+.4%})")
+    if not ok_c:
+        print("      → 첫 반복 이후 모든 반복이 검증을 악화시켰다 = 학습이 진행되지 않았다.")
+
+    return ok_a and ok_c

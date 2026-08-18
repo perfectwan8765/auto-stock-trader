@@ -15,7 +15,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from _common import load_config, qlib_init_kwargs  # qlib import 전(MLFLOW env 설정)
+from _common import check_learning, load_config, qlib_init_kwargs  # qlib import 전(MLFLOW env 설정)
 
 import numpy as np
 import pandas as pd
@@ -81,18 +81,23 @@ def main() -> None:
     exp_name = cfg_path.stem
     with R.start(experiment_name=exp_name):
         print("\n🔧 학습 시작 (valid early-stop, seed 고정)")
-        model.fit(dataset)  # R.log_metrics가 활성 recorder에 기록되도록 컨텍스트 안에서 학습
+        # evals_result로 학습곡선을 받아 둔다 — 게이트 A(null 대비)의 입력이고,
+        # recorder에도 남지만 거기서 되읽으려면 지표 키·부호 규약을 두 곳에서 알아야 한다.
+        evals_result: dict = {}
+        model.fit(dataset, evals_result=evals_result)  # R.log_metrics가 활성 recorder에 기록되도록 컨텍스트 안에서
 
         recorder = R.get_recorder()
         SignalRecord(model=model, dataset=dataset, recorder=recorder).generate()
         SigAnaRecord(recorder=recorder, ana_long_short=False, ann_scaler=52).generate()
         PortAnaRecord(recorder=recorder, config=cfg["port_analysis_config"]).generate()
 
-        _gates(cfg, market, dataset, recorder)
+        _gates(cfg, market, dataset, recorder, model, evals_result)
 
 
-def _gates(cfg: dict, market: str, dataset: DatasetH, recorder) -> None:
-    print("\n" + "=" * 60 + "\n게이트\n" + "=" * 60)
+def _gates(cfg: dict, market: str, dataset: DatasetH, recorder, model, evals_result: dict) -> None:
+    """배선 게이트 4개 + 학습 게이트 1개. **절을 나눠 출력한다** — 섞으면 "배선은 맞는데
+    학습이 안 됐다"는 상태가 4:1로 묻힌다. 실제로 그 상태로 19런이 PASS로 기록됐다."""
+    print("\n" + "=" * 60 + "\n게이트 — 배선 (설정이 의도대로 배선됐나)\n" + "=" * 60)
     passed = []
 
     # 1) Alpha158 158개 피처 계산
@@ -125,6 +130,9 @@ def _gates(cfg: dict, market: str, dataset: DatasetH, recorder) -> None:
     print(f"\n   IC={ic.mean():.4f}  RankIC={ric.mean():.4f}")
     print(risk)
     passed.append(_gate(np.isfinite(ic.mean()) and not risk.empty, "IC/RankIC/포트폴리오 지표 산출됨"))
+
+    print("\n" + "=" * 60 + "\n게이트 — 학습 (모델이 실제로 학습됐나)\n" + "=" * 60)
+    passed.append(check_learning(cfg, model, evals_result))
 
     print("\n" + "=" * 60)
     if all(passed):
