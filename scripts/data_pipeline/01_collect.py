@@ -18,7 +18,10 @@ import json
 import time
 from datetime import datetime, timezone
 
-from _common import write_csv_atomic, COLLECT_REPORT, DATA_RAW, START_DATE, log, read_universe
+from _common import (
+    COLLECT_REPORT, DATA_RAW, START_DATE, log, read_universe,
+    write_csv_atomic, write_text_atomic,
+)
 from collect import download_one, last_date_of
 
 def main() -> None:
