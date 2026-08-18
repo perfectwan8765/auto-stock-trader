@@ -43,7 +43,7 @@ def qlib_init_kwargs(cfg: dict) -> tuple[dict, Path]:
 
 # ------------------------------------------------------- 학습 건전성 게이트 (게이트 A)
 
-# CSRankNorm 라벨에 대한 **상수 예측의 MSE**. 이 값은 데이터가 필요 없다 —
+# CSRankNorm 라벨에 대한 상수 예측의 MSE. 이 값은 데이터가 필요 없다 —
 # CSRankNorm이 `rank(pct=True) → -0.5 → ×3.46`이므로 출력 분산이 종목수·기간·시장과
 # 무관하게 정해진다(3.46 = 1/std[uniform], qlib CSRankNorm docstring).
 #   Var = 3.46² / 12 = 0.9976333…   (test 구간 label.pkl 실측 0.9976316)
@@ -51,7 +51,7 @@ def qlib_init_kwargs(cfg: dict) -> tuple[dict, Path]:
 NULL_MSE_CSRANKNORM = 3.46**2 / 12
 
 # 모델별 검증지표 규약: 모델클래스 → (지표가 클수록 좋은가, 지표값 → MSE 변환).
-# ★ 이 표가 있어야 하는 이유는 **부호가 모델마다 반대**라는 것이다 — LightGBM은 `l2`에
+# ★ 이 표가 있어야 하는 이유는 부호가 모델마다 반대라는 것이다 — LightGBM은 `l2`에
 #   MSE를 그대로 담고(작을수록 좋음), qlib pytorch 모델은 metric_fn이 `-loss_fn`을 반환해
 #   음수 MSE를 담는다(클수록 좋음). 최선점을 min으로 찾으면 GRU는 정확히 거꾸로 읽힌다.
 #   모델을 추가할 때마다 밟을 함정이므로 규약을 여기 한 곳에 선언한다.

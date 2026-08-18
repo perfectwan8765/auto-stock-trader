@@ -399,8 +399,8 @@ def render_orders():
         st.dataframe(style_gubun(disp), width="stretch", hide_index=True)
         st.caption("금액/수량: 매수는 USD 금액, 매도는 주식수. 주문ID = 결정적 멱등키(중복 발주 방지).")
 
-    # sell_clamped_to_sellable은 **발주된** 주문이다(수량만 줄었다). skipped에 함께 담겨
-    # 오지만 "스킵된 주문" 표에 넣으면 운영자가 매도가 안 나간 줄 알고 수동으로 한 번 더 낸다.
+    # sell_clamped_to_sellable은 스킵이 아니라 발주된 주문이다(수량만 줄었다). skipped에
+    # 함께 담겨 오지만 "스킵된 주문" 표에 넣으면 운영자가 매도가 안 나간 줄 알고 한 번 더 낸다.
     clamped = [s for s, r in data["skipped"] if r == "sell_clamped_to_sellable"]
     skipped = [(s, r) for s, r in data["skipped"] if r != "sell_clamped_to_sellable"]
 

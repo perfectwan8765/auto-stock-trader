@@ -122,7 +122,7 @@ class Fill:
     filled_quantity: float | None = None
     avg_filled_price: float | None = None
     filled_amount: float | None = None
-    # ⚠️ 주문 응답의 commission·tax는 **실측상 항상 0이다**(Phase 0, n=38). 실효 수수료는
+    # ⚠️ 주문 응답의 commission·tax는 실측상 항상 0이다(Phase 0, n=38). 실효 수수료는
     # holdings의 `cost.commission`(~0.13%)에만 있다 — 이 값으로 비용을 계산하면 0으로 착각한다.
     commission: float | None = None
     tax: float | None = None

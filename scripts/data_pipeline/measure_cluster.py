@@ -52,8 +52,8 @@ def _load(q: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     if "AFF10B5ONE" in m.columns:
         m = m[m.AFF10B5ONE != 1]
     # ⚠️ 소유자 테이블을 거래행에 조인하면 안 된다 — 공동 제출 시 거래행이 내부자 수만큼
-    # 복제되어 거래금액이 그 배수로 부풀고, 부풀림 계수가 곧 내부자 수라 **금액 하한이
-    # 복수 내부자 이벤트를 우선 통과시킨다**(클러스터 비율이 위로 편향된다).
+    # 복제되어 거래금액이 그 배수로 부풀고, 부풀림 계수가 곧 내부자 수라 금액 하한이
+    # 복수 내부자 이벤트를 우선 통과시킨다(클러스터 비율이 위로 편향된다).
     # → 금액은 거래행에서, 내부자 수는 (accession, 소유자) 쌍에서 따로 센다.
     pairs = own[own.ACCESSION_NUMBER.isin(set(m.ACCESSION_NUMBER))][
         ["ACCESSION_NUMBER", "RPTOWNERCIK"]].drop_duplicates()

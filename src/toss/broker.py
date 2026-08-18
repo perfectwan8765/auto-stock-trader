@@ -25,7 +25,7 @@ from .errors import TossApiError, TossError
 # 3.10 datetime.fromisoformat는 이 포맷을 못 읽어 strptime으로 파싱한다.
 _TS_FMT = "%Y-%m-%dT%H:%M:%S.%f%z"
 
-# 토스 에러코드 → execution의 정규화된 실패 어휘. 이 표가 **어댑터에 있다는 것**이 요점이다:
+# 토스 에러코드 → execution의 정규화된 실패 어휘. 이 표가 러너가 아니라 어댑터에 있는 것이 요점이다:
 # 러너가 토스 코드 문자열을 알면 두 번째 브로커를 붙일 때 러너를 고쳐야 한다.
 _RATE_LIMIT_CODES = {"rate-limit-exceeded"}
 _MARKET_CLOSED_CODES = {"amount-order-outside-regular-hours", "order-hours-closed"}

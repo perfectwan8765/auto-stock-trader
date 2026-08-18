@@ -66,7 +66,7 @@ def check_fold_and_leak(quarters: list[str]) -> tuple[bool, int]:
     ok_fold = 2.0 <= ratio <= 3.2
     print(f"\n(1) 접기 비율 — 거래행 {trans_rows:,} / 이벤트 {len(pairs):,} = **{ratio:.2f}배**"
           f"  {'✅ (기대 약 2.6배)' if ok_fold else '❌ 접기가 동작하지 않는다'}")
-    # 원자료의 오기 건수는 우리가 못 고친다 — 판정 대상은 **우리 이벤트 집합**이다.
+    # 원자료의 오기 건수는 우리가 못 고친다 — 판정 대상은 우리 이벤트 집합이다.
     print(f"(2) 미래 누수 — DERA 원자료에 FILING_DATE < TRANS_DATE 인 거래행 {leak}건"
           " (원자료 오기, 아래에서 걸러졌는지 확인한다)")
     return ok_fold, leak

@@ -306,7 +306,7 @@ class RebalanceRunner:
                     break
         except BaseException as exc:
             # 발주 루프가 예외로 끊겼다(서킷브레이커 트립·속도제한 소진·미분류 오류·Ctrl-C).
-            # **기록이 가장 필요한 경우가 여기다** — 이미 나간 주문의 client_order_id·snapshot이
+            # 기록이 가장 필요한 경우가 여기다 — 이미 나간 주문의 client_order_id·snapshot이
             # 어디에도 없으면 나중에 무엇이 체결됐는지 확인할 실마리가 없다.
             #
             # fills는 조회하지 않는다. 장마감·속도제한 소진 상황에서 추가 API 호출이 또
