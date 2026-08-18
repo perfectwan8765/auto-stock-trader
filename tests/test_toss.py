@@ -1,7 +1,7 @@
 """src/toss 단위테스트 (개선10 예외화 · 개선13 redact · 토큰 캐싱).
 
 mock으로 requests를 대체해 실 API 없이 검증. 개선11(401 재시도)은 Phase 5로 유보 → 미포함.
-실행:  .venv/bin/python -m pytest tests/test_toss.py -q
+실행:  uv run pytest tests/test_toss.py -q
 """
 from __future__ import annotations
 

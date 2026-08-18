@@ -3,7 +3,7 @@
 kill(1)("최근 구간조차 커버리지 80% 미달 → 종료")은 전수로 판정해야 한다. 티커 기준과 이벤트
 가중 기준을 모두 낸다 — 둘이 다르면 결측이 이벤트 수와 상관됐다는 뜻이고 그 자체가 정보다.
 
-실행:  .venv/bin/python scripts/data_pipeline/measure_coverage.py
+실행:  uv run python scripts/data_pipeline/measure_coverage.py
 """
 from __future__ import annotations
 

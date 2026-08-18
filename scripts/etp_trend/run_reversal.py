@@ -6,7 +6,7 @@
 
 ⚠️ §3의 QQQ 민감도는 **보고 전용이며 판정은 10자산으로만** 한다.
 
-실행:  OMP_NUM_THREADS=1 .venv/bin/python scripts/etp_trend/run_reversal.py
+실행:  OMP_NUM_THREADS=1 uv run python scripts/etp_trend/run_reversal.py
 """
 from __future__ import annotations
 

@@ -17,8 +17,8 @@
   오류로 안전 종료.
 
 실행:
-  .venv/bin/python scripts/live/rebalance.py                 # dry-run(기본)
-  .venv/bin/python scripts/live/rebalance.py --confirm       # 실발주(정규장·키 필요)
+  uv run python scripts/live/rebalance.py                 # dry-run(기본)
+  uv run python scripts/live/rebalance.py --confirm       # 실발주(정규장·키 필요)
 """
 from __future__ import annotations
 

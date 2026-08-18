@@ -11,7 +11,7 @@
 
 최소수수료·지정가/정수주 지원((c)(d))은 **실주문이 필요**하므로 이 스크립트 범위 밖이다.
 
-실행:  .venv/bin/python scripts/toss_probe/06_microcap_coverage.py
+실행:  uv run python scripts/toss_probe/06_microcap_coverage.py
 옵션:  --limit 300   (후보 상위 N개만 조회)   --batch 20
 전제:  universe/microcap_candidates.txt (gen_microcap_candidates.py로 생성)
 """

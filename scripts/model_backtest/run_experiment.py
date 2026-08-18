@@ -4,7 +4,7 @@
 검증 없이 표에 오른다. Alpha360+GRU 등 대안 비교용(공정 비교는
 라벨·주간스텝·비용·세그먼트를 베이스라인과 동일하게 둔 config로).
 
-실행: OMP_NUM_THREADS=1 .venv/bin/python scripts/model_backtest/run_experiment.py --config <yaml>
+실행: OMP_NUM_THREADS=1 uv run python scripts/model_backtest/run_experiment.py --config <yaml>
 ⚠️ macOS: torch↔lightgbm OpenMP 런타임 충돌로 DL 학습이 무음 크래시 → OMP_NUM_THREADS=1 필수.
 """
 from __future__ import annotations

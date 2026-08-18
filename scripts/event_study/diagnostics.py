@@ -5,7 +5,7 @@
       모멘텀을 대리로 쓴다. 같은 방향이 안 나오면 파이프라인을 의심해야 한다.
   (2) NANO 층화  (3) 은행 제외 부표본  (4) raw vs winsor  (5) calendar-time (D16 교차확인)
 
-실행:  .venv/bin/python scripts/event_study/diagnostics.py
+실행:  uv run python scripts/event_study/diagnostics.py
 """
 from __future__ import annotations
 

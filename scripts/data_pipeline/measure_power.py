@@ -5,7 +5,7 @@
 이상치 규칙 하나로 t가 4배 넘게 움직이고 n에 √로 달려 있어, `measure_*` 산출물이 바뀔 때마다
 다시 내야 한다. 구조 통계만 만든다 — 이벤트 조건부 수익률은 계산하지 않는다.
 
-실행:  .venv/bin/python scripts/data_pipeline/measure_power.py
+실행:  uv run python scripts/data_pipeline/measure_power.py
 """
 from __future__ import annotations
 

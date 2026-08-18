@@ -10,7 +10,7 @@
    판정 대상이 된다.
    웹 캘리브레이션: qlib 리더보드 GBDT는 다 같은 대역(IC 0.045~0.050, CN·일간). US·주간선 압축 예상.
 
-실행:  .venv/bin/python scripts/model_backtest/probe_models.py [--config <yaml>]
+실행:  uv run python scripts/model_backtest/probe_models.py [--config <yaml>]
 """
 from __future__ import annotations
 

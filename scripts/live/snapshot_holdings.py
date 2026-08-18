@@ -6,7 +6,7 @@ holdings의 `cost.commission`에만 있다(Phase 0 실측). 그런데 이 값은
 
 주문을 내지 않는다. cron으로 매 거래일 1회 돌리는 것을 전제로 만들었다.
 
-실행:  .venv/bin/python scripts/live/snapshot_holdings.py
+실행:  uv run python scripts/live/snapshot_holdings.py
 옵션:  --out-dir execution_logs
 """
 from __future__ import annotations

@@ -13,7 +13,7 @@ concept 폴백 체인 (40종목 표본 커버리지 실측):
 EntityPublicFloat는 주식수가 아니라 USD 유통시가총액이라 단위가 다르다. 연 1회 갱신이라
 최대 12개월 stale이지만, 가격 조인이 필요 없어 폐지 종목의 유일한 시총 경로가 된다.
 
-실행:  .venv/bin/python scripts/data_pipeline/fetch_shares_outstanding.py
+실행:  uv run python scripts/data_pipeline/fetch_shares_outstanding.py
 옵션:  --limit 100   (상위 N종목만)
 """
 from __future__ import annotations

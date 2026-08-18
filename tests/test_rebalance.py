@@ -1,7 +1,7 @@
 """compute_rebalance 단위테스트 (순수 함수 — 브로커 불요).
 
 개선1(자금이월)·5(멱등키)·8(최소금액) 검증.
-실행:  .venv/bin/python -m pytest tests/test_rebalance.py -q
+실행:  uv run pytest tests/test_rebalance.py -q
 """
 from __future__ import annotations
 

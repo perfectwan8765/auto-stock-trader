@@ -7,7 +7,7 @@ classify_missing_reason)는 자기 입력을 누가 만드는지 코드로 알 �
 
 생산 책임만 옮긴 것이며 산출물 내용은 같다.
 
-실행:  .venv/bin/python scripts/data_pipeline/fetch_candidate_closes.py
+실행:  uv run python scripts/data_pipeline/fetch_candidate_closes.py
 옵션:  --start 2015-01-01  --end 2026-08-14  --refresh(캐시 무시)
 """
 from __future__ import annotations

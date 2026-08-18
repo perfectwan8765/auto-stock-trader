@@ -7,7 +7,7 @@ SHY는 랭킹 제외 · 절대 필터 없음. 나머지(리밸·비용·편입·
 ⚠️ 집행·비용·드리프트는 `run_trend.run()`의 `target_fn` 이음매로 **공유한다.** 따로 구현하면
 초과수익이 구현 차이를 재게 된다.
 
-실행:  OMP_NUM_THREADS=1 .venv/bin/python scripts/etp_trend/run_rotation.py
+실행:  OMP_NUM_THREADS=1 uv run python scripts/etp_trend/run_rotation.py
 """
 from __future__ import annotations
 

@@ -10,7 +10,7 @@
    `_selection` 런으로 남긴다 — 6개 중 하나를 고르는 것이 다중검정의 실체인데 종전에는
    stdout으로만 갔다. 손익 계열은 의도적으로 없다(백테스트=test 관측이므로 규율 위반).
 
-실행:  .venv/bin/python scripts/model_backtest/tune_hyperparams.py [--config <yaml>]
+실행:  uv run python scripts/model_backtest/tune_hyperparams.py [--config <yaml>]
 """
 from __future__ import annotations
 

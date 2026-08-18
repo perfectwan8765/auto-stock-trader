@@ -3,7 +3,7 @@
 ⚠️ **PIT 아니다.** EDGAR submissions API는 현재 SIC를 준다. 공시 시점 값은 각 파일링의 SGML
 헤더에 있으나 accession 단위라 요청이 수만 건이 된다. 섹터 통제용 근사로만 쓸 것.
 
-실행:  .venv/bin/python scripts/data_pipeline/fetch_sic.py
+실행:  uv run python scripts/data_pipeline/fetch_sic.py
 옵션:  --events data/insider_events.csv (기본) — 이 파일의 CIK만 조회
 """
 from __future__ import annotations

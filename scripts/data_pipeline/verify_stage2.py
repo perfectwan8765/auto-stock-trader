@@ -5,7 +5,7 @@
   (3) 스팟체크 — 직전 종가 간격·지연 범위·청산가 존재
   (4) AFF10B5ONE 부재 분기에서 필터가 실제로 꺼지는가
 
-실행:  .venv/bin/python scripts/data_pipeline/verify_stage2.py
+실행:  uv run python scripts/data_pipeline/verify_stage2.py
 옵션:  --events data/insider_events_full.csv
 """
 from __future__ import annotations

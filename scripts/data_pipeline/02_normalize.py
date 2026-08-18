@@ -12,7 +12,7 @@ Phase 3의 Alpha158·백테스트가 qlib 표준 데이터와 동일하게 동�
   6) vwap 프록시 = (H+L+C)/3 (Alpha158이 $vwap 참조, yfinance 미제공)
 출력 컬럼: date, open, high, low, close, vwap, volume, factor, symbol
 
-실행:  .venv/bin/python scripts/data_pipeline/02_normalize.py
+실행:  uv run python scripts/data_pipeline/02_normalize.py
 """
 from __future__ import annotations
 

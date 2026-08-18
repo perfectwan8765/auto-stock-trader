@@ -12,13 +12,13 @@ grilling 결정(2026-07-17, [../../qlib-toss.md](../../qlib-toss.md) Phase 3)의
 
 ```bash
 # ① 배선 스모크 (41종목). QLIB_UNIVERSE 미설정 시 data/qlib_us는 ② 전체가 덮어씀 주의.
-.venv/bin/python scripts/model_backtest/run_backtest.py --config workflow_config_alpha158_lgb_pilot.yaml
+uv run python scripts/model_backtest/run_backtest.py --config workflow_config_alpha158_lgb_pilot.yaml
 # ② 엣지 판독 (S&P500 500종목, SPY 벤치)
-.venv/bin/python scripts/model_backtest/run_backtest.py --config workflow_config_alpha158_lgb_sp500.yaml
+uv run python scripts/model_backtest/run_backtest.py --config workflow_config_alpha158_lgb_sp500.yaml
 # Phase 4a: 최신일 예측 → 상위 K 등가중 목표비중 → signals/signal_<date>.json
-.venv/bin/python scripts/model_backtest/generate_signal.py --topk 20
+uv run python scripts/model_backtest/generate_signal.py --topk 20
 # Phase 4b: 시그널 → 발주계획 오프라인 dry-run(실발주 없음, synthetic 브로커)
-.venv/bin/python scripts/model_backtest/dry_run_rebalance.py
+uv run python scripts/model_backtest/dry_run_rebalance.py
 ```
 
 `generate_signal.py`는 학습모델로 최신 거래일을 예측 → 상위 K 등가중 시그널(JSON) 생성.

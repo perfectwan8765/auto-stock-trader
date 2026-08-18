@@ -9,7 +9,7 @@ valid IC/RankIC가 개선되는지 본다. 모델은 A1의 안전 후보(med_reg
    라벨 정의 변경은 설계축이므로 **시행으로 센다**(trial-ledger.md 층② 규칙).
    회전율·비용 이득(월간 리밸)은 별개(백테스트 사안) — 여기선 순수 '신호 예측력'만 비교.
 
-실행:  .venv/bin/python scripts/model_backtest/probe_label_horizon.py [--config <yaml>]
+실행:  uv run python scripts/model_backtest/probe_label_horizon.py [--config <yaml>]
 """
 from __future__ import annotations
 

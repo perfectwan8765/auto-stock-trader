@@ -8,7 +8,7 @@
   5) 수집 리포트에 뒤처진(stale) 종목이 없음 — 01_collect의 폴백이 조용히 흘러가는 것을 막는다
   6) 번들 자체에도 뒤처진 종목이 없음 — (5)가 신뢰하는 중간 산출물이 없어도 잡는다
 
-실행:  .venv/bin/python scripts/data_pipeline/04_verify.py
+실행:  uv run python scripts/data_pipeline/04_verify.py
 """
 from __future__ import annotations
 

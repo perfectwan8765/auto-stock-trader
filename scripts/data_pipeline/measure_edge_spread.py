@@ -6,7 +6,7 @@
 원래 합격선은 "음수 추정 ≤10%"였으나 세 추정량·네 창이 전부 미달해 음수 처리 규칙으로
 교체했다(이탈 D-2). 실측 음수 비율은 EDGE 14.7% < AR 16.2% << CS 51.9%(w252).
 
-실행:  .venv/bin/python scripts/data_pipeline/measure_edge_spread.py
+실행:  uv run python scripts/data_pipeline/measure_edge_spread.py
 """
 from __future__ import annotations
 

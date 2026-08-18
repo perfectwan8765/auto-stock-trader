@@ -1,6 +1,6 @@
 """백테스트·주문 대시보드 — mlruns pkl과 execution_logs를 웹 화면으로 렌더.
 
-실행:  .venv/bin/streamlit run scripts/dashboard/app.py
+실행:  uv run streamlit run scripts/dashboard/app.py
 
 두 탭:
   · 백테스트: 자산곡선·성과지표·주차별 보유·매매내역(포지션 diff 복원)·회전율

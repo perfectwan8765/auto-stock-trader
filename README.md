@@ -41,10 +41,18 @@ qlib은 예측까지만 담당한다(주문 생성은 지원하지 않는다). �
 
 ```bash
 brew install libomp                        # LightGBM OpenMP 런타임
-python -m venv .venv                        # pyenv 3.10.13 기준
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -c "import qlib, lightgbm, xgboost"   # 검증
+brew install uv                            # 의존성·가상환경 관리
+uv sync                                    # .venv 생성 + uv.lock 대로 설치
+uv run python -c "import qlib, lightgbm, xgboost"   # 검증
 ```
+
+파이썬 버전은 `.python-version`(pyenv 3.10.13)이 정하고 `pyproject.toml`의
+`requires-python = "==3.10.*"`이 그 범위를 못 박는다. **`.python-version`을 지우거나
+`uv python pin`으로 건드리지 말 것** — pyenv shim이 없으면 uv가 인터프리터를 못 찾는다.
+
+의존성을 바꿀 때는 `pyproject.toml`을 고치고 `uv lock`을 돌린다. CI가 `--locked`로
+검사하므로 락을 안 돌리면 거기서 멈춘다. 근거·이전 기록은
+[`docs/research/uv-adoption.md`](docs/research/uv-adoption.md).
 
 ## 아키텍처
 
@@ -386,7 +394,8 @@ docs/project/      로드맵·작업계획서·사전등록·설계 (추적)
 docs/research/     외부 문헌·사례 조사 (추적)
 docs/findings/     계좌 실측 스냅샷 (gitignore — 계좌 고유값)
 docs/tooling/      에이전트 도구 조사 (gitignore — 저장소 주제 밖)
-requirements.txt   의존성 핀 (재현용)
+pyproject.toml     의존성 선언 + 린트 설정
+uv.lock            해석된 의존성 (추적 — 재현용)
 ```
 
 ## 보안

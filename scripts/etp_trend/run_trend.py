@@ -7,7 +7,7 @@
 ⚠️ 벤치마크는 SPY가 아니라 **같은 위험자산 10종의 등가중 매수보유**다. 분산의 몫을
 타이밍의 몫으로 착각하지 않기 위한 것이며 이것이 판정의 좌변을 정한다(§0).
 
-실행:  OMP_NUM_THREADS=1 .venv/bin/python scripts/etp_trend/run_trend.py
+실행:  OMP_NUM_THREADS=1 uv run python scripts/etp_trend/run_trend.py
 """
 from __future__ import annotations
 
