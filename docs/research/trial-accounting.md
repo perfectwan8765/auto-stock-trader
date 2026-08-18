@@ -13,6 +13,13 @@
 - 자매 문서: [`training-gates.md`](training-gates.md) — 학습 건전성 게이트.
   저쪽은 **"이 한 번의 학습이 성립했는가"**, 이쪽은 **"몇 번 시도했는가"** 를 다룬다.
   저쪽 §4.1이 넘긴 MLflow 파일 백엔드 마이그레이션은 이 문서 **§6**이다.
+- 후속 문서: [`optuna-adoption.md`](optuna-adoption.md) — 탐색 프레임워크 도입 판단(**반대**).
+  §1.2의 DSR을 N=200까지 연장하면 0.0081이 되어 "많이 돌려서 이긴다"가 산술적으로 닫힌다.
+  §7.2의 guided-search 조항이 그 판단의 핵심 근거다.
+- ★ **이 문서 §10-1의 착지점은 실행됐다** — [`trial-ledger.md`](../project/trial-ledger.md)가
+  2층 구조로 개설됐고 기존 23런이 백필됐다. §10-2(스윕이 후보마다 런을 열게 하기)도 반영됐으나
+  **부모-자식 런은 쓸 수 없었다** — `MLflowRecorder.start_run`이 `mlflow.start_run`에 `nested`를
+  넘기지 않는다. `sweep_id` param으로 묶는 방식으로 대체했다(커밋 `8e8a4db`).
 - 중복 회피: DSR·MinBTL 공식은 [`dashboard-features.md`](dashboard-features.md) §4-4에 이미 있다.
   이 문서는 **공식을 다시 쓰지 않고, 그 공식의 가정·한계·이 저장소 적용 가능성만** 다룬다.
   (다만 §9에 §4-4 수치예의 **정정 필요** 항목이 있다.)

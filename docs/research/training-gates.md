@@ -9,6 +9,13 @@
 - 저장소 실측은 전부 `mlruns/`(로컬)에서 뽑았다. 계좌 관련 값은 없다.
 - 자매 문서: [`trial-accounting.md`](trial-accounting.md) — 시행 횟수 N·다중검정·음성 결과 기록.
   이쪽은 **"이 한 번의 학습이 성립했는가"**, 저쪽은 **"몇 번 시도했는가"** 를 다룬다.
+- 후속 문서: [`optuna-adoption.md`](optuna-adoption.md) — 하이퍼파라미터 탐색 프레임워크 도입 판단.
+  §1.2의 "정규화 전 구간에서 R²가 null 위로 안 올라간다"가 그쪽 도입 반대 근거 중 하나다.
+  §2.3의 게이트 C를 `MedianPruner`로 대체하면 안 되는 이유도 그쪽에 있다(비교 대상이 **다른
+  trial의 중앙값**이라, 균일하게 실패한 분포에서는 절반이 통과한다).
+- 구현: 게이트 A·C는 [`_common.py`](../../scripts/model_backtest/_common.py) `check_learning`이고
+  두 러너(`run_backtest`·`run_experiment`)가 공유한다. 판정 기록은
+  [`trial-ledger.md`](../project/trial-ledger.md).
 
 ---
 
