@@ -39,7 +39,7 @@ def download_one(symbol: str, start: str) -> pd.DataFrame | None:
                 progress=False,
                 threads=False,
             )
-        except Exception as e:  # 네트워크·스크래퍼 예외 광범위 → 재시도 대상
+        except Exception as e:  # noqa: BLE001 — 네트워크·스크래퍼 예외 광범위, 재시도 대상
             log(f"   [{symbol}] 시도 {attempt}/{MAX_RETRIES} 예외: {e}")
             df = None
 

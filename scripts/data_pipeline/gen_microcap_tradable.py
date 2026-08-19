@@ -13,7 +13,7 @@
 거르면 승자 배제 편향이 생긴다(실측: PIT 마이크로캡 이벤트의 35.9% 탈락).
 시총 컷은 이벤트 시점 PIT로 계산하는 gen_universe_by_mcap.py가 담당한다.
 
-실행:  .venv/bin/python scripts/data_pipeline/gen_microcap_tradable.py
+실행:  uv run python scripts/data_pipeline/gen_microcap_tradable.py
 """
 from __future__ import annotations
 

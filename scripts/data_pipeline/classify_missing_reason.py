@@ -12,7 +12,7 @@
 ⚠️ S-4·SC TO-T·8-K Item 2.01은 **인수하는 쪽도 제출**한다. 확실 근거로 쓰면 피인수가
    부풀려진다(느슨한 기준 85% vs 엄격 기준 70.5%). 약한 근거로만 쓴다.
 
-실행:  .venv/bin/python scripts/data_pipeline/classify_missing_reason.py
+실행:  uv run python scripts/data_pipeline/classify_missing_reason.py
 옵션:  --limit 200   (표본만)
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import CANDIDATE_CLOSES_CSV  # noqa: E402
+from _common import CANDIDATE_CLOSES_CSV
 
 ROOT = Path(__file__).resolve().parents[2]
 CANDIDATES_CSV = ROOT / "universe" / "microcap_candidates.csv"

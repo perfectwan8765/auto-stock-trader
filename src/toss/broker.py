@@ -25,7 +25,7 @@ from .errors import TossApiError, TossError
 # 3.10 datetime.fromisoformat는 이 포맷을 못 읽어 strptime으로 파싱한다.
 _TS_FMT = "%Y-%m-%dT%H:%M:%S.%f%z"
 
-# 토스 에러코드 → execution의 정규화된 실패 어휘. 이 표가 **어댑터에 있다는 것**이 요점이다:
+# 토스 에러코드 → execution의 정규화된 실패 어휘. 이 표가 러너가 아니라 어댑터에 있는 것이 요점이다:
 # 러너가 토스 코드 문자열을 알면 두 번째 브로커를 붙일 때 러너를 고쳐야 한다.
 _RATE_LIMIT_CODES = {"rate-limit-exceeded"}
 _MARKET_CLOSED_CODES = {"amount-order-outside-regular-hours", "order-hours-closed"}
@@ -63,7 +63,8 @@ def _num(value, field: str) -> float:
 
 def _opt_num(value, field: str) -> float | None:
     """있으면 float, 없으면 None. 토스는 숫자를 문자열로 주는데 그대로 흘리면
-    슬리피지(체결가 − 결정가) 계산이 TypeError로 죽는다."""
+    슬리피지(체결가 − 결정가) 계산이 TypeError로 죽는다.
+    """
     return None if value is None else _num(value, field)
 
 
@@ -83,7 +84,8 @@ def _regular_market_open(resp, now: datetime) -> bool:
     """market-calendar 응답의 오늘 정규장 구간 [start, end) 안이면 True.
 
     시각은 모두 tz 포함(+09:00). isOpen 불린 필드가 없어 시각 비교로 판정한다.
-    파싱 불가·필드 누락이면 보수적으로 닫힘(False)."""
+    파싱 불가·필드 누락이면 보수적으로 닫힘(False).
+    """
     result = _result(resp)
     if not isinstance(result, dict):
         return False
@@ -100,8 +102,23 @@ def _regular_market_open(resp, now: datetime) -> bool:
 
 
 class TossBroker:
+    """`Broker` 프로토콜의 토스 구현. 응답 스키마 해석이 일어나는 **유일한** 층이다.
+
+    camelCase 필드명과 문자열 숫자를 여기서 흡수해 `execution`의 데이터 모델로 바꾸고,
+    토스 에러코드를 `execution.errors`의 정규화된 예외로 번역한다. 러너가 이 둘을 알면
+    두 번째 브로커를 붙일 때 러너를 고쳐야 한다.
+    """
+
     def __init__(self, client: TossClient, read_sleep_s: float = 1.0,
                  read_retries: int = 3, read_backoff_s: float = 2.0):
+        """읽기 호출의 rate-limit 대응 파라미터를 받는다.
+
+        Args:
+            client: HTTP 호출 담당.
+            read_sleep_s: 읽기 호출 사이 간격. ACCOUNT 그룹이 1 TPS라 기본 1초다.
+            read_retries: rate-limit 응답 시 재시도 횟수.
+            read_backoff_s: 재시도 간 대기.
+        """
         self.client = client
         self.read_sleep_s = read_sleep_s      # ACCOUNT 그룹 1 TPS — 읽기 사이 간격
         self.read_retries = read_retries
@@ -132,6 +149,7 @@ class TossBroker:
 
         Returns:
             result.items[] 원소를 그대로 담은 리스트.
+
         Raises:
             TossError: 응답 형태가 예상과 다를 때.
         """
@@ -192,6 +210,17 @@ class TossBroker:
         return out
 
     def get_prices(self, symbols: list[str]) -> dict[str, float]:
+        """심볼 → 현재가. `lastPrice`가 문자열로 오므로 여기서 float으로 바꾼다.
+
+        Args:
+            symbols: 조회할 심볼 목록.
+
+        Returns:
+            응답에 있는 심볼만 담는다. 미제공 심볼은 키가 빠진다.
+
+        Raises:
+            TossError: 응답이 리스트가 아닐 때.
+        """
         resp = self._get("/api/v1/prices", params={"symbols": ",".join(symbols)})
         items = _result(resp)
         if not isinstance(items, list):
@@ -212,8 +241,10 @@ class TossBroker:
 
         Args:
             symbols: 조회할 심볼 목록.
+
         Returns:
             result[] 원소를 그대로 담은 리스트. 미제공 심볼은 빠진다.
+
         Raises:
             TossError: 응답이 리스트가 아닐 때.
         """
@@ -230,8 +261,10 @@ class TossBroker:
 
         Args:
             symbols: 조회할 심볼 목록.
+
         Returns:
             symbol -> 원 응답 dict. 미취급 심볼은 키 자체가 없다.
+
         Raises:
             TossError: 응답이 리스트가 아닐 때.
         """
@@ -241,6 +274,10 @@ class TossBroker:
         return {str(it["symbol"]): it for it in items if it.get("symbol") is not None}
 
     def get_buying_power_usd(self) -> float:
+        """USD 가용 현금. 알 수 없으면 0을 돌려준다 — 매수를 막는 쪽이 안전하다.
+
+        이번 사이클 매도대금은 T+N 결제라 포함되지 않는다(개선1).
+        """
         # currency 쿼리파람 필수(없으면 400). USD 가용 현금 = result.cashBuyingPower.
         resp = self._get("/api/v1/buying-power", params={"currency": "USD"})
         result = _result(resp)
@@ -274,6 +311,7 @@ class TossBroker:
 
         Returns:
             result dict. 미체결이면 `execution`이 없거나 비어 있다.
+
         Raises:
             TossError: 응답이 dict가 아닐 때.
         """
@@ -283,10 +321,30 @@ class TossBroker:
         return result
 
     def is_market_open(self) -> bool:
+        """미국 정규장 중인가. `isOpen` 필드가 없어 응답의 시각 구간과 비교해 판정한다.
+
+        파싱 불가·필드 누락이면 보수적으로 닫힘(False)을 답한다.
+        """
         resp = self._get("/api/v1/market-calendar/US", need_account=False)
         return _regular_market_open(resp, datetime.now(timezone.utc))
 
     def place(self, intent: OrderIntent) -> str:
+        """시장가로 발주하고 `orderId`를 돌려준다.
+
+        `intent.kind`가 `"amount"`면 `orderAmount`(소수점 매수), 아니면 `quantity`로 보낸다.
+
+        Returns:
+            브로커 주문 ID. ★ **발주는 성공했는데 응답에서 ID를 못 찾으면 빈 문자열**이다.
+            여기서 예외를 던지면 러너가 `placed`에 담지 못해 그 종목이 화이트리스트에서
+            빠지고, 청산도 trim도 안 되면서 다음 사이클에 다시 매수된다.
+
+        Raises:
+            OrderRejected: 이 주문만 거부.
+            BrokerMarketClosed: 장 마감.
+            BrokerRateLimited: rate-limit 초과.
+            TossApiError: 위 표에 없는 에러코드. 번역하지 않고 그대로 전파한다 — 러너가
+                잡지 않고 중단시키는 게 안전하다.
+        """
         # 모든 숫자 필드는 문자열(API 규약)
         body = {
             "symbol": intent.symbol,

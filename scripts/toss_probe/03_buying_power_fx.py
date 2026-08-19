@@ -5,7 +5,7 @@
 실측(2026-07-20): buying-power는 `currency`, exchange-rate는 `baseCurrency`+`quoteCurrency`가
        필수 쿼리파람(없으면 400). 자동환전은 안 됨 → 봇 가동 전 KRW→USD 선환전 필요로 확정.
 """
-import _bootstrap  # noqa: F401
+import _bootstrap
 
 import json
 

@@ -17,8 +17,8 @@
   오류로 안전 종료.
 
 실행:
-  .venv/bin/python scripts/live/rebalance.py                 # dry-run(기본)
-  .venv/bin/python scripts/live/rebalance.py --confirm       # 실발주(정규장·키 필요)
+  uv run python scripts/live/rebalance.py                 # dry-run(기본)
+  uv run python scripts/live/rebalance.py --confirm       # 실발주(정규장·키 필요)
 """
 from __future__ import annotations
 
@@ -141,10 +141,10 @@ def main() -> None:
     # E10: 상태를 파일로 남긴다. 인메모리만 쓰면 상한에 걸려 멈춘 뒤 재기동하는 것만으로
     # 카운터가 0이 되어 안전판이 우회된다.
     #
-    # day는 **미국 거래일**이다. 시그널 날짜를 쓰면 양방향으로 깨진다 — 같은 시그널을 여러 날
-    # 재사용하면(--max-age-days 기본 5) 카운터가 날짜를 넘겨 누적되고, 시그널을 다시 만들면
-    # 같은 날인데도 day 키가 바뀌어 상한이 통째로 리셋된다(안전판 우회). 정규장이 KST 자정을
-    # 넘겨도 한 세션이 한 day에 담기도록 신선도 가드와 같은 기준을 쓴다.
+    # day는 로컬 날짜가 아니라 미국 거래일이다. 시그널 날짜를 쓰면 양방향으로 깨진다 —
+    # 같은 시그널을 여러 날 재사용하면(--max-age-days 기본 5) 카운터가 날짜를 넘겨 누적되고,
+    # 시그널을 다시 만들면 같은 날인데도 day 키가 바뀌어 상한이 통째로 리셋된다(안전판 우회).
+    # 정규장이 KST 자정을 넘겨도 한 세션이 한 day에 담기도록 신선도 가드와 같은 기준을 쓴다.
     us_today = datetime.now(US_MARKET_TZ).date()
     cb = CircuitBreaker(max_orders_per_day=args.max_orders, max_loss_usd=args.max_loss,
                         path=args.circuit_state, day=us_today.strftime("%Y%m%d"))
@@ -185,7 +185,8 @@ def main() -> None:
 
 def _cli() -> None:
     """CLI 경계: 라이브러리 예외(TossError·ExecutionError)를 clean 메시지·exit로 변환(개선10).
-    서킷브레이커·kill switch(ExecutionError)도 traceback 없이 정지 메시지로."""
+    서킷브레이커·kill switch(ExecutionError)도 traceback 없이 정지 메시지로.
+    """
     try:
         main()
     except (TossError, ExecutionError) as e:

@@ -14,7 +14,7 @@ SEC DERA "Insider Transactions Data Sets"(Form 3/4/5 파싱본)에서 내부자 
 이벤트 단위는 **(발행사, FILING_DATE)**. 거래행 기준으로 세면 2.6배 과대 계상된다.
 진입 기준 시각은 TRANS_DATE(거래일)가 아니라 FILING_DATE(공시일) — 거래일 기준은 미래 누수다.
 
-실행:  .venv/bin/python scripts/data_pipeline/gen_microcap_candidates.py
+실행:  uv run python scripts/data_pipeline/gen_microcap_candidates.py
 옵션:  --quarters 2023q1 2023q2 ...   (기본: 2023q1~2025q1)
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import EVENTS_CSV  # noqa: E402
+from _common import EVENTS_CSV
 
 ROOT = Path(__file__).resolve().parents[2]
 DERA_DIR = ROOT / "data" / "dera"

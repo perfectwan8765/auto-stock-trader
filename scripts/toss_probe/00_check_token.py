@@ -3,7 +3,7 @@
 실행:  python scripts/toss_probe/00_check_token.py
 전제:  .env에 TOSS_CLIENT_ID / TOSS_CLIENT_SECRET 설정
 """
-import _bootstrap  # noqa: F401
+import _bootstrap
 
 from toss.auth import TokenManager
 from toss.config import load_config

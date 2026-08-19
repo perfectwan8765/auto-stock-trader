@@ -5,7 +5,7 @@
 달력의 마지막 날짜, instruments 개수, 종목 하나만 보기 때문이다. 한 종목이라도
 최신이면 stale이 숨는다.
 
-실행:  .venv/bin/python -m pytest tests/test_data_freshness.py -q
+실행:  uv run pytest tests/test_data_freshness.py -q
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "data_pipeline"))
 
-from _common import stale_symbols  # noqa: E402
+from _common import stale_symbols
 
 
 def _report(**symbols: str) -> dict:

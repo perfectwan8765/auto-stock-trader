@@ -2,7 +2,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
+
+# 이 네 어휘는 주문로그·대시보드가 읽는 계약이다 — tests/test_runner_behaviour.py가
+# 스킵 사유 집합을 고정하고 scripts/dashboard/app.py가 한글 라벨로 매핑한다.
+# str로 두면 오타가 런타임까지 살아남아 대시보드에서 "알 수 없는 사유"로만 드러난다.
+OrderSide = Literal["BUY", "SELL"]
+OrderKind = Literal["amount", "quantity"]
+OrderReason = Literal["exit", "exit_partial", "trim", "enter", "add"]
+SkipReason = Literal[
+    "within_band",
+    "below_min_order",
+    "insufficient_buying_power",
+    "partial_insufficient_buying_power",
+    # 아래 셋은 러너가 붙인다(compute_rebalance가 아니라) — 화이트리스트·T+N 결제 판단이다.
+    "excluded_manual",
+    "not_sellable_settlement",
+    "sell_clamped_to_sellable",
+]
 
 
 @dataclass(frozen=True)
@@ -10,25 +27,31 @@ class OrderIntent:
     """발주 의도(계획). dry-run은 이 리스트만 만들고 실발주는 broker.place로."""
 
     symbol: str
-    side: str            # "BUY" | "SELL"
-    kind: str            # "amount"(USD, 매수) | "quantity"(주식수, 매도)
-    value: float         # 매수=USD 금액, 매도=주식수
+    side: OrderSide
+    kind: OrderKind      # 매수는 amount(USD), 매도는 quantity(주식수)로만 나간다
+    value: float         # kind에 따라 USD 금액 또는 주식수
     client_order_id: str  # 결정적 멱등키 — 재시도·재개 시 중복주문 방지
-    # "exit"(편출 전량) | "exit_partial"(편출인데 매도가능수량으로 줄어 잔량이 남는다)
-    # | "trim"(초과보유 축소) | "enter"(신규) | "add"(추가매수)
-    # exit / exit_partial 구분은 ManagedState가 관리셋에서 뺄지 정하는 근거다.
-    reason: str
+    # exit / exit_partial 구분은 ManagedState가 관리셋에서 뺄지 정하는 근거다 —
+    # 잔량이 남은 exit을 exit_partial로 표시하지 않으면 그 종목이 M에도 X에도 없게 된다.
+    reason: OrderReason
 
 
 @dataclass(frozen=True)
 class RebalanceParams:
+    """`compute_rebalance` 한 번의 입력 중 종목에 딸리지 않는 것들.
+
+    금액은 전부 USD다. 한 실행 안에서 이 값들이 흔들리면 예산 계산이 어긋나므로
+    러너가 사이클 시작에 한 번 읽어 고정한다.
+    """
+
     total_equity_usd: float   # 총 평가액(목표 비중 → 금액 환산 기준)
     buying_power_usd: float   # 매수는 이 한도 내에서만(이번 사이클 매도대금 미포함)
     min_order_usd: float      # 최소 주문금액
     rebalance_date: str       # YYYYMMDD, 멱등키 재현용
     # no-trade 밴드: 목표 대비 |편차|/목표 가 이 값 이하면 거래하지 않는다.
     # min_order_usd는 집행 하한이지 정책이 아니다 — 실측값이 $1이라 이것만 쓰면
-    # 포트폴리오의 0.14% 드리프트에도 주문이 나간다. 근거는 qlib-toss.md Phase 5.5.
+    # 포트폴리오의 0.14% 드리프트에도 주문이 나간다.
+    # 근거는 docs/project/roadmap.md Phase 5.5 — 그 표가 점검 주기와 변경 조건도 정한다.
     rebalance_band: float = 0.10
 
 
@@ -37,18 +60,15 @@ class RebalancePlan:
     """리밸런싱 산출물. orders는 실행 순서(매도先→매수), skipped는 무동작 사유."""
 
     orders: list[OrderIntent]
-    # (symbol, reason): within_band | below_min_order | insufficient_buying_power
-    #                 | partial_insufficient_buying_power | excluded_manual
-    #                 | not_sellable_settlement | sell_clamped_to_sellable
-    # 뒤 셋은 러너가 붙인다(compute_rebalance가 아니라) — 화이트리스트·T+N 결제 판단이다.
-    skipped: list[tuple[str, str]]
+    skipped: list[tuple[str, SkipReason]]
 
 
 @dataclass
 class RunResult:
     """리밸런싱 1회 실행의 산출물.
 
-    `RebalancePlan`과 같은 급의 seam 데이터 모델이라 러너가 아니라 여기 산다."""
+    `RebalancePlan`과 같은 급의 seam 데이터 모델이라 러너가 아니라 여기 산다.
+    """
 
     plan: RebalancePlan
     dry_run: bool
@@ -102,7 +122,7 @@ class Fill:
     filled_quantity: float | None = None
     avg_filled_price: float | None = None
     filled_amount: float | None = None
-    # ⚠️ 주문 응답의 commission·tax는 **실측상 항상 0이다**(Phase 0, n=38). 실효 수수료는
+    # ⚠️ 주문 응답의 commission·tax는 실측상 항상 0이다(Phase 0, n=38). 실효 수수료는
     # holdings의 `cost.commission`(~0.13%)에만 있다 — 이 값으로 비용을 계산하면 0으로 착각한다.
     commission: float | None = None
     tax: float | None = None
@@ -122,12 +142,41 @@ class Broker(Protocol):
     해석하지 않게 하려는 것이다(그러면 두 번째 어댑터를 붙일 때 러너를 고쳐야 한다).
     """
 
-    def snapshot(self, target_symbols: list[str]) -> AccountSnapshot: ...
-    # T+N 미결제분을 제외한 매도가능수량.
-    # ⚠️ **값을 알 수 없는 심볼은 결과에 키를 넣지 않는다.** 0으로 채우면 러너가 "미결제라
-    # 못 판다"로 읽어 매도를 조용히 버리고 매 사이클 반복한다. 러너의 미조회 중단 가드가
-    # 이 계약에 의존하므로, 지키지 않는 구현은 가드를 죽은 코드로 만든다(무음 회귀).
-    def get_sellable(self, symbols: list[str]) -> dict[str, float]: ...
-    def is_market_open(self) -> bool: ...
-    def place(self, intent: OrderIntent) -> str: ...         # 실발주(멱등키 포함) → 주문 ID
-    def get_fill(self, order_id: str) -> Fill | None: ...    # 체결 실측. 미체결·미지원이면 None
+    def snapshot(self, target_symbols: list[str]) -> AccountSnapshot:
+        """보유·가격·예수금·당일손익을 한 시점에서 함께 읽는다.
+
+        시점이 섞이면 예산 계산이 흔들리므로 러너는 한 실행에 한 번만 부른다.
+
+        Args:
+            target_symbols: 목표 포트폴리오의 심볼. 보유에 없어도 가격은 필요하다.
+        """
+        ...
+
+    def get_sellable(self, symbols: list[str]) -> dict[str, float]:
+        """T+N 미결제분을 제외한 매도가능수량.
+
+        ⚠️ **값을 알 수 없는 심볼은 결과에 키를 넣지 않는다.** 0으로 채우면 러너가 "미결제라
+        못 판다"로 읽어 매도를 조용히 버리고 매 사이클 반복한다. 러너의 미조회 중단 가드가
+        이 계약에 의존하므로, 지키지 않는 구현은 가드를 죽은 코드로 만든다(무음 회귀).
+        """
+        ...
+
+    def is_market_open(self) -> bool:
+        """정규장 중인가. 판정 불가면 보수적으로 닫힘을 답해야 한다."""
+        ...
+
+    def place(self, intent: OrderIntent) -> str:
+        """실발주하고 브로커 주문 ID를 돌려준다.
+
+        `intent.client_order_id`가 멱등키다 — 같은 키로 두 번 부르면 브로커가 거른다.
+
+        Raises:
+            OrderRejected: 이 주문만 거부(잔액 부족·미취급 종목 등).
+            BrokerMarketClosed: 장 마감. 러너가 잔여 주문을 중단한다.
+            BrokerRateLimited: rate-limit 초과.
+        """
+        ...
+
+    def get_fill(self, order_id: str) -> Fill | None:
+        """체결 실측(슬리피지 계산 입력). 미체결·미지원이면 None."""
+        ...

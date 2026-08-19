@@ -6,7 +6,7 @@
 ⚠️ 현 베이스라인은 엣지 미검출(Phase 3 A1) → 이 시그널은 **배관/데모용, 실알파 아님**.
    실 가동 시엔 최신일까지 재학습 필요(여기선 config의 train/valid로 학습 후 test 마지막일 예측).
 
-실행:  .venv/bin/python scripts/model_backtest/generate_signal.py [--config <yaml>] [--topk 20]
+실행:  uv run python scripts/model_backtest/generate_signal.py [--config <yaml>] [--topk 20]
 """
 from __future__ import annotations
 

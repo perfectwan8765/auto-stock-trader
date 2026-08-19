@@ -1,7 +1,7 @@
 """src/toss 단위테스트 (개선10 예외화 · 개선13 redact · 토큰 캐싱).
 
 mock으로 requests를 대체해 실 API 없이 검증. 개선11(401 재시도)은 Phase 5로 유보 → 미포함.
-실행:  .venv/bin/python -m pytest tests/test_toss.py -q
+실행:  uv run pytest tests/test_toss.py -q
 """
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ def test_401_retry_uses_fresh_token_even_when_cache_not_written(tmp_path):
         assert client.get("/api/v1/holdings") == {"ok": 1}
 
     assert sent == ["Bearer stale", "Bearer fresh"]
-    # 거부된 토큰이 캐시에 남으면 **다음** 요청이 다시 401을 맞는다 — 강제 재발급이
+    # 거부된 토큰이 캐시에 남으면 다음 요청이 다시 401을 맞는다 — 강제 재발급이
     # 캐시할 수 없으면(만료 미상) 옛 항목을 지워야 한다.
     assert not tm.cache_path.exists()
 

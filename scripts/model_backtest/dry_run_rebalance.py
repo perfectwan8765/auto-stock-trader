@@ -4,7 +4,7 @@ signals/signal_<date>.json(Phase 4a) + synthetic 브로커 상태로 RebalanceRu
 데이터→예측→시그널→리밸계획 end-to-end를 **토스 API 없이** 확인. 실 브로커 상태(보유·가격·
 가용)는 Phase 0(키 승인) 후 TossBroker로 교체 → dry_run=False로 실발주.
 
-실행:  .venv/bin/python scripts/model_backtest/dry_run_rebalance.py [--signal <path>]
+실행:  uv run python scripts/model_backtest/dry_run_rebalance.py [--signal <path>]
 """
 from __future__ import annotations
 

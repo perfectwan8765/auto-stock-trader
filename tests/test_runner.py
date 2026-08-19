@@ -280,7 +280,8 @@ class _NoQueryBroker(MockBroker):
 
     종전에는 속성 부재를 인위적으로 위조해야 했다. Protocol이 체결조회를 필수로 선언하면서
     러너는 hasattr로 선택 취급하던 모순의 대가였다. get_fill이
-    `Fill | None`이라 그 위조가 필요 없다."""
+    `Fill | None`이라 그 위조가 필요 없다.
+    """
 
     def get_fill(self, order_id):
         return None

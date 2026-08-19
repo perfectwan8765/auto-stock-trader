@@ -5,7 +5,7 @@
   (3) 스팟체크 — 직전 종가 간격·지연 범위·청산가 존재
   (4) AFF10B5ONE 부재 분기에서 필터가 실제로 꺼지는가
 
-실행:  .venv/bin/python scripts/data_pipeline/verify_stage2.py
+실행:  uv run python scripts/data_pipeline/verify_stage2.py
 옵션:  --events data/insider_events_full.csv
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ import pandas as pd
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV  # noqa: E402
+from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV
 
 ROOT = Path(__file__).resolve().parents[2]
 DERA = ROOT / "data" / "dera"
@@ -64,9 +64,9 @@ def check_fold_and_leak(quarters: list[str]) -> tuple[bool, int]:
 
     ratio = trans_rows / len(pairs) if pairs else 0
     ok_fold = 2.0 <= ratio <= 3.2
-    print(f"\n(1) 접기 비율 — 거래행 {trans_rows:,} / 이벤트 {len(pairs):,} = **{ratio:.2f}배**"
+    print(f"\n(1) 접기 비율 — 거래행 {trans_rows:,} / 이벤트 {len(pairs):,} = {ratio:.2f}배"
           f"  {'✅ (기대 약 2.6배)' if ok_fold else '❌ 접기가 동작하지 않는다'}")
-    # 원자료의 오기 건수는 우리가 못 고친다 — 판정 대상은 **우리 이벤트 집합**이다.
+    # 원자료의 오기 건수는 우리가 못 고친다 — 판정 대상은 우리 이벤트 집합이다.
     print(f"(2) 미래 누수 — DERA 원자료에 FILING_DATE < TRANS_DATE 인 거래행 {leak}건"
           " (원자료 오기, 아래에서 걸러졌는지 확인한다)")
     return ok_fold, leak
@@ -77,7 +77,7 @@ def check_events_leak(events: Path) -> bool:
     with open(events, newline="", encoding="utf-8") as f:
         lags = [int(r["filing_lag_days"]) for r in csv.DictReader(f)]
     neg = sum(1 for x in lags if x < 0)
-    print(f"    → 이벤트 집합({events.name}) 음수 지연 **{neg}건** / {len(lags):,}"
+    print(f"    → 이벤트 집합({events.name}) 음수 지연 {neg}건 / {len(lags):,}"
           f"  {'✅ 전부 걸러짐' if neg == 0 else '❌ 필터가 음수를 통과시킨다'}")
     return neg == 0
 

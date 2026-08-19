@@ -5,7 +5,7 @@
       모멘텀을 대리로 쓴다. 같은 방향이 안 나오면 파이프라인을 의심해야 한다.
   (2) NANO 층화  (3) 은행 제외 부표본  (4) raw vs winsor  (5) calendar-time (D16 교차확인)
 
-실행:  .venv/bin/python scripts/event_study/diagnostics.py
+실행:  uv run python scripts/event_study/diagnostics.py
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_panel import load_factors, load_prices, load_sic  # noqa: E402
+from build_panel import load_factors, load_prices, load_sic
 
 ROOT = Path(__file__).resolve().parents[2]
 BHAR = ROOT / "data" / "event_study_bhar_H30.csv"
@@ -102,7 +102,7 @@ def main() -> None:
     print(f"  일별 alpha {beta[0]*100:+.4f}%  연환산 {beta[0]*252*100:+.2f}%  t={beta[0]/se:.2f}"
           f"  (관측 {len(y)}일)")
     print(f"  → 이벤트 단위 총 BHAR({df.bhar_gross.mean():+.2%})과 "
-          f"{'같은 부호' if np.sign(beta[0]) == np.sign(df.bhar_gross.mean()) else '**다른 부호**'}")
+          f"{'같은 부호' if np.sign(beta[0]) == np.sign(df.bhar_gross.mean()) else '⚠️ 다른 부호'}")
 
 
 if __name__ == "__main__":

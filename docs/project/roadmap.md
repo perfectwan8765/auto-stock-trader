@@ -231,10 +231,16 @@ qlib.init(provider_uri=<절대경로>, region=REG_US, kernels=1)   # ← 회피�
 ## Phase 1 — 개발 환경 구축 (M1 + pyenv)
 
 - `brew install libomp` (LightGBM OpenMP)
-- `pyenv install 3.10.14` → 프로젝트 폴더 `python -m venv .venv`
-- `pip install "numpy<2" "cython<3" "pandas<2.2"` 선행 → `pip install pyqlib` (실패 시 소스 `pip install -e .`)
+- `pyenv install 3.10.13` → `.python-version` 이 이 버전을 고정한다
 - **검증:** `python -c "import qlib, lightgbm, xgboost"` 성공
 - 커밋: `build: qlib 환경 구축 (M1+pyenv)`
+
+> **2026-08-19 갱신 — 의존성 관리가 uv 로 넘어갔다.** 위 절차는 `pip install` 로
+> 세 핀을 선행 설치하는 것이었으나, 지금 절차는 `brew install uv` → `uv sync` 다.
+> "설치 순서가 중요"했던 이유는 소스 빌드였는데 pyqlib 0.9.7 이 wheel 만 배포하므로
+> 그 제약이 사라졌고 `cython` 핀도 함께 제거됐다. 근거·이전 기록은
+> [`../research/uv-adoption.md`](../research/uv-adoption.md), 설치 절차는
+> [README](../../README.md) 를 본다.
 
 ## Phase 2 — 데이터 파이프라인 (S&P500 → Qlib bin)
 
@@ -257,7 +263,9 @@ qlib.init(provider_uri=<절대경로>, region=REG_US, kernels=1)   # ← 회피�
 
 ### 작업
 - Alpha158 + LightGBM, config YAML 작성 (라벨은 B2대로 override)
-- **train/valid/test 시간순 분리, test 최근 30% 격리**
+- **train/valid/test 시간순 분리, test 최근 30% 격리**. ★ **분할 경계에 embargo**(2026-08-19) —
+  라벨이 `Ref($close,-6)`로 6거래일 미래를 보므로 각 구간 종료일을 6거래일 당긴다. 갭이 0이면
+  구간 마지막 샘플의 라벨이 다음 구간 가격으로 계산돼 누수가 된다. 커밋 `977d22a`
 - walk-forward 1회 이상
 - **[개선2] 백테스트=실전 조건 미러링:** 주간 리밸런싱·K·롱온리·소수점(fractional) 포지션·토스 실제 수수료·환전비용을 백테스트에 반영. **Phase 0(2026-07-20) 실측 반영 완료** — 실측치로 교체(§Phase 0 실측 상수):
   - 거래 수수료: **~0.10%/편도** (보유 `cost.commission` 실측, 매수·매도 각각) ✅
@@ -267,9 +275,69 @@ qlib.init(provider_uri=<절대경로>, region=REG_US, kernels=1)   # ← 회피�
 - **[개선7] 회전율 제어:** TopkDropout은 이산 등가중(목표비중 개념 없음)이라 no-trade band 적용 지점 없음 → **회전율은 `n_drop` 튜닝으로 제어**(네이티브). 비중형 band가 필요하면 EnhancedIndexing 등 비중형 전략으로 교체 검토
 - **벤치마크:** SPY(+41종목 등가중) 대비 초과수익·정보비율 병행 보고 (절대 Sharpe만으로 판단 금지)
 - **검증 지표:** IC/Rank IC, IR, MDD, 회전율. **Sharpe 4+면 과최적 의심 → 재검토**
-- **규율:** valid로 early-stop, test는 1회만 관측(test 튜닝 금지), 시드 고정
+  · ⚠️ **이 지표들만으로는 학습 실패를 못 잡는다.** 상수 예측도 유한한 IC를 내고 `isfinite`
+  검사를 통과한다. 아래 "학습 건전성 게이트" 참조
+- **규율:** valid로 early-stop, test는 1회만 관측(test 튜닝 금지), 시드 고정.
+  ★ **시행은 원장에 적는다** — [`trial-ledger.md`](trial-ledger.md). 스윕은 후보마다 독립
+  런을 열어야 한다(안 열면 6회가 1런으로 접히고 후보 이름이 영구 소실됨, 커밋 `8e8a4db`)
 - **에지케이스:** lookahead bias·비현실적 지표·회전율 과다·백테스트-실전 조건 괴리·$700/최소주문 granularity 미반영(백테스트 낙관 편향, 한계 기록)
 - 커밋: `feat(model): Alpha158+LightGBM 학습·백테스트 (walk-forward)`
+
+### 학습 건전성 게이트 (2026-08-19 신설)
+
+**배선 게이트만으로는 "학습이 됐나"를 못 본다.** 종전 4개 게이트(피처 수·라벨·주간 스텝·지표
+산출)는 전부 설정 검증이었고, 넷째가 `np.isfinite(ic.mean())`이라 **상수 예측도 통과했다.**
+그 결과 `mlruns/` 검증곡선 19런 중 **12런이 최선점 step 0인데 전부 PASS로 기록됐다.**
+
+구현은 [`_common.py`](../../scripts/model_backtest/_common.py) `check_learning`·
+`check_prediction_shape`이고 **두 러너가 공유한다** — `run_experiment.py`에도 넣어야 한다.
+GRU는 `run_backtest.py`를 지나지 않으므로 한쪽만 막으면 대안 모델이 무검증으로 표에 오른다.
+
+| 축 | 판정 | 임계 | 모델 비의존성 |
+|---|---|---|---|
+| **A** 수준 | `R²_oos = 1 − MSE_valid/0.99763 > 0` | **부호뿐** | ✅ 완전 |
+| **C** 진행 | 최선 step > 0 | 없음 | ⚠️ 반복학습기만 |
+| **B** 결정성 | 행 순서를 섞어도 top-k 동일 | 없음 | ⚠️ 이산 출력만 |
+
+- **A의 분모는 상수다.** `CSRankNorm`이 `rank(pct)→−0.5→×3.46`이라 분산이 `3.46²/12`로
+  데이터와 무관하다(실측 오차 1.7e-6). 게이트 비용이 0이다
+- **A의 임계는 부호뿐이고 그 이상 못 간다.** 유의성으로 올리려면 Diebold-Mariano류가 필요한데
+  "학습모델 vs 상수예측"은 **중첩 모델**이라 정규근사가 성립하지 않는다(Diebold 2015).
+  값을 정하면 그 자체가 연구자 자유도다 → **A가 말할 수 있는 것은 `≤0`이면 실패, `>0`이면
+  "실패는 아님"까지**
+- ⚠️⚠️ **B는 단방향이다. 통과를 근거로 쓰면 안 된다.** 이산 출력에서만 발화한다
+
+**★ 세 축이 다 필요하다는 것이 실측됐다.** 두 모델이 서로 다른 축에서만 실패한다:
+
+| | A 수준 | C 진행 | B 결정성 |
+|---|---|---|---|
+| Alpha158+LGB | ✅ | **❌** step 0/50 | **❌** 거래일 89.5%에서 보유 변동 |
+| Alpha360+GRU | **❌** R²<0 | ✅ | ✅ 886일 전부 1.000 |
+
+**어느 하나만 있었어도 한쪽은 통과했다.** 그리고 R²가 더 나쁜 쪽(GRU)이 B를 통과한다.
+
+### ★ 게이트의 첫 실전 성과 (L-004)
+
+embargo 적용 후 베이스라인을 재실행하니 **비용후 초과수익이 −5.6% → +5.75%, IR이 −0.35 →
++0.40으로 부호가 뒤집혔다.** train을 6거래일(전체의 0.4%) 줄인 것만으로다.
+
+원인은 예측 퇴화다 — 499종목에 고유 예측값이 39개뿐이라 top-20이 대부분 동점 tie-break로
+정해지고, 학습데이터의 미세한 변화가 보유를 재추첨한다. **게이트가 없었다면 이 재실행은
+*"embargo를 넣으니 11%p 개선됐다"* 로 읽혔을 것이다.** 게이트는 세 축 전부 실패로 답했다.
+
+곧 **README의 −5.6%도 +5.75%도 무언가의 측정값이 아니다.**
+
+### 시행 예산 — 이미 초과했다
+
+- **MinBTL**: 백테스트 183주 = 3.52년 → "IS Sharpe 1인데 OOS 기대 0"을 피할 최대 독립시행
+  **N=18**인데 23런을 돌렸다. 게이트가 아니라 게이지로 읽는다 — **예산 소진은 "새 시행보다
+  표본 확장이 먼저"라는 신호다**
+- **DSR**: 최선 런(GRU, IR 0.923)이 무보정 PSR 0.9611 → **DSR 0.4968**(N̂=4.86, 가장 관대) →
+  0.1163(N=23). 시행 횟수 하나를 넣는 것만으로 "95% 통과"가 동전던지기가 된다.
+  ⚠️ 좌변은 **초과수익**이어야 한다 — 원수익에 걸면 DSR 0.9965로 통과하고 순위까지 뒤집힌다
+- 근거·한계는 [`../research/trial-accounting.md`](../research/trial-accounting.md),
+  게이트 문헌은 [`../research/training-gates.md`](../research/training-gates.md),
+  탐색 프레임워크 도입 판단(**반대**)은 [`../research/optuna-adoption.md`](../research/optuna-adoption.md)
 
 ## Phase 4 — 시그널 생성 자동화
 
@@ -408,7 +476,7 @@ $700 계좌에서 **포트폴리오의 0.14% 드리프트에도 주문이 나갔
 
 | 판정 | 대상 | 결과 |
 |---|---|---|
-| Phase 3 | 대형주 주간 Alpha158+LightGBM / GRU | 엣지 없음. +12%는 β1.5 틸트였고 alpha≈0 |
+| Phase 3 | 대형주 주간 Alpha158+LightGBM / GRU | 엣지 없음. +12%는 β1.5 틸트였고 alpha≈0. ★ **2026-08-19 추가: 애초에 학습이 안 됐다**(검증 R² ≤ 0, 최선 step 0). 게이트가 없어 약세장 재실험·CAPM 분해까지 가서야 알았다 — 학습 직후 한 줄로 끝났을 문제다 |
 | Edge v2 | 마이크로캡 + Form 4 `P` 매수 | 1층 게이트 불통과. 비용 전 BHAR +0.21%(t=0.52) |
 
 따라서:

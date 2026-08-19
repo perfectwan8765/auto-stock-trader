@@ -1,6 +1,6 @@
 """목표 비중 → 발주 계획 계산 (브로커 비의존, 순수 함수).
 
-규약(qlib-toss.md Phase 5):
+규약(docs/project/roadmap.md Phase 5):
 - 개선1 자금순환(T+N): 매수는 **현재 가용 USD 한도** 내에서만. 이번 사이클 매도대금은 T+N로
   즉시 안 잡힐 수 있어 매수 예산에 포함하지 않는다(보수적). 초과분은 다음 사이클로 이월.
 - 개선5 결정적 멱등키: clientOrderId = hash(리밸일자+symbol+side+금액). 재시도·크래시 재개 시 동일.
@@ -8,7 +8,7 @@
 - 매도先→매수 순서(자금 확보). 매도 대상: 편출(exit) 전량 + 초과보유(trim).
 - no-trade 밴드: 목표 대비 편차가 `rebalance_band` 이내면 거래하지 않는다. Vanguard의
   1926–2018 표에서 연 10% 임계(14회)와 월 0% 임계(1,116회)의 수익률이 8.20%로 같았다 —
-  회전만 80배다. 상세·출처는 qlib-toss.md Phase 5.5.
+  회전만 80배다. 상세·출처는 docs/project/roadmap.md Phase 5.5.
 """
 from __future__ import annotations
 
@@ -34,6 +34,22 @@ def compute_rebalance(
     prices: dict[str, float],
     params: RebalanceParams,
 ) -> RebalancePlan:
+    """목표 비중과 현재 보유의 차이를 발주 계획으로 바꾼다. 계산만 하고 발주하지 않는다.
+
+    규약은 모듈 docstring에 있다. 매도가 앞에 서고, 매수는 `params.buying_power_usd`
+    안에서만 배분되며, 밴드 안이거나 최소금액 미달인 종목은 사유와 함께 `skipped`로 간다.
+
+    Args:
+        target_weights: 심볼 → 목표 비중. 0 이하는 편출로 읽는다. 합이 1일 필요는 없다.
+        holdings: 심볼 → 현재 보유 수량. 봇 관리분만 넘겨야 한다.
+        prices: 심볼 → 결정 시점 가격. **누락은 0으로 읽힌다** — 보유 평가액이 0이 되어
+            trim이 막히고 매수는 목표 전액이 나간다. 러너가 사전에 중단시키므로
+            (`runner.py`의 보유 종목 가격 누락 가드) 이 함수는 방어하지 않는다.
+        params: 총 평가액·가용 현금·밴드 등 종목에 딸리지 않는 입력.
+
+    Returns:
+        실행 순서대로 담긴 `orders` 와 무동작 사유 `skipped` 를 가진 `RebalancePlan`.
+    """
     orders: list[OrderIntent] = []
     skipped: list[tuple[str, str]] = []
 

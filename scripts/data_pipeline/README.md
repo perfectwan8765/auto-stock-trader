@@ -16,17 +16,17 @@ yfinance로 미국주식 일봉을 수집하고 Qlib `.bin` 포맷으로 변환�
 
 ```bash
 # 전체 파이프라인 (수집→정규화→dump→검증)
-.venv/bin/python scripts/data_pipeline/run_pipeline.py
+uv run python scripts/data_pipeline/run_pipeline.py
 
 # 개별 단계
-.venv/bin/python scripts/data_pipeline/01_collect.py            # → data/raw/*.csv
-.venv/bin/python scripts/data_pipeline/02_normalize.py          # → data/normalized/*.csv
-.venv/bin/python scripts/data_pipeline/03_dump_bin.py           # → data/qlib_us/{calendars,instruments,features}
-.venv/bin/python scripts/data_pipeline/04_verify.py             # 검증 게이트
+uv run python scripts/data_pipeline/01_collect.py            # → data/raw/*.csv
+uv run python scripts/data_pipeline/02_normalize.py          # → data/normalized/*.csv
+uv run python scripts/data_pipeline/03_dump_bin.py           # → data/qlib_us/{calendars,instruments,features}
+uv run python scripts/data_pipeline/04_verify.py             # 검증 게이트
 
 # 부분 수집 / 재빌드만
-.venv/bin/python scripts/data_pipeline/run_pipeline.py --symbols AAPL MSFT
-.venv/bin/python scripts/data_pipeline/run_pipeline.py --skip-collect
+uv run python scripts/data_pipeline/run_pipeline.py --symbols AAPL MSFT
+uv run python scripts/data_pipeline/run_pipeline.py --skip-collect
 ```
 
 Phase 3에서 `qlib.init(provider_uri="data/qlib_us", region=REG_US)`로 사용.

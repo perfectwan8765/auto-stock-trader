@@ -13,7 +13,7 @@ concept 폴백 체인 (40종목 표본 커버리지 실측):
 EntityPublicFloat는 주식수가 아니라 USD 유통시가총액이라 단위가 다르다. 연 1회 갱신이라
 최대 12개월 stale이지만, 가격 조인이 필요 없어 폐지 종목의 유일한 시총 경로가 된다.
 
-실행:  .venv/bin/python scripts/data_pipeline/fetch_shares_outstanding.py
+실행:  uv run python scripts/data_pipeline/fetch_shares_outstanding.py
 옵션:  --limit 100   (상위 N종목만)
 """
 from __future__ import annotations
@@ -156,7 +156,7 @@ def main() -> None:
     n = len(rows)
     print(f"\n종목 {n:,} → 주식수 확보 {n_shares:,} ({100*n_shares/n:.1f}%) · "
           f"public_float {n_float:,} ({100*n_float/n:.1f}%)")
-    print(f"주식수 미확보 {n - n_shares:,} 중 — 미보고(404/빈값) {n_none:,} · **전송실패 {n_err:,}**")
+    print(f"주식수 미확보 {n - n_shares:,} 중 — 미보고(404/빈값) {n_none:,} · 전송실패 {n_err:,}")
     if n_err:
         print("  ⚠️ 전송실패는 재실행하면 회수될 수 있다. metric='error' 행으로 기록됨.")
     print(f"[완료] {OUT.relative_to(ROOT)}")

@@ -6,7 +6,7 @@ Wikipedia 'List of S&P 500 companies'의 constituents 표에서 Symbol 열을 �
 - 클래스주 티커 보정: yfinance는 'BRK-B' 형식(Wikipedia는 'BRK.B') → '.'→'-'.
 - 벤치마크용 SPY를 맨 끝에 추가(매매 유니버스에서는 dump 후 instruments/sp500.txt로 제외).
 
-실행:  .venv/bin/python scripts/data_pipeline/gen_sp500_universe.py
+실행:  uv run python scripts/data_pipeline/gen_sp500_universe.py
 """
 from __future__ import annotations
 

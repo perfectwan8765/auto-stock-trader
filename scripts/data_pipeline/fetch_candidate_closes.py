@@ -7,7 +7,7 @@ classify_missing_reason)는 자기 입력을 누가 만드는지 코드로 알 �
 
 생산 책임만 옮긴 것이며 산출물 내용은 같다.
 
-실행:  .venv/bin/python scripts/data_pipeline/fetch_candidate_closes.py
+실행:  uv run python scripts/data_pipeline/fetch_candidate_closes.py
 옵션:  --start 2015-01-01  --end 2026-08-14  --refresh(캐시 무시)
 """
 from __future__ import annotations
@@ -77,7 +77,8 @@ def fetch_closes(symbols: list[str], start: str, end: str,
         print(f"  실패 예: {', '.join(failed[:5])}")
     PRICES.parent.mkdir(parents=True, exist_ok=True)
     # 전량 실패(yfinance 스로틀 등) 시 빈 프레임으로 캐시를 덮으면 수 시간치 수집이 날아가고
-    # 하류가 전부 "결측"으로 읽어 **가짜 kill 판정**을 만든다. 받은 게 없으면 캐시를 건드리지 않는다.
+    # 하류가 전부 "결측"으로 읽어 가짜 kill 판정을 만든다.
+    # 받은 게 없으면 캐시를 건드리지 않는다.
     if df.empty:
         raise SystemExit("[중단] 수집 결과가 비어 있다 — 기존 캐시를 보존한다. 재시도할 것")
     write_csv_atomic(df, PRICES)

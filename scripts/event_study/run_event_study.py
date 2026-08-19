@@ -4,7 +4,7 @@
 진입 t+1 시가 · 청산 H거래일 뒤 종가 · BHAR = 실현 − 팩터모형 기대 · 추정창 t−250~t−31 ·
 비용 왕복(수수료 0.10%×2 + spread_final×2) · winsor 1% 횡단면 · 교차상관 보정 t · 판정 h=0.
 
-실행:  .venv/bin/python scripts/event_study/run_event_study.py
+실행:  uv run python scripts/event_study/run_event_study.py
 옵션:  --horizons 30 60 90   --no-cost(비용 전 값 확인용, 판정 아님)
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_panel import judged_population, load_factors, load_prices, load_sic  # noqa: E402
+from build_panel import judged_population, load_factors, load_prices, load_sic
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "event_study_bhar.csv"

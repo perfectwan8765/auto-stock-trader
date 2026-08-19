@@ -60,7 +60,7 @@ def main() -> None:
     cand = pd.read_csv(CANDIDATES, dtype={"cik": str})
     have_price = set(pd.read_csv(PRICES, nrows=1).columns) - {"Date"}
     missing = cand[~cand.symbol.isin(have_price)]
-    print(f"후보 {len(cand)} / 가격 보유 {len(have_price)} / **결측 {len(missing)}**", flush=True)
+    print(f"후보 {len(cand)} / 가격 보유 {len(have_price)} / 결측 {len(missing)}", flush=True)
 
     ev = pd.read_csv(EVENTS, parse_dates=["filing_date"])
     ev_by_sym = {s: list(g.filing_date) for s, g in ev.groupby("symbol")}
@@ -122,7 +122,7 @@ def main() -> None:
               & ((g.bankrupt_gap.isna()) | (g.bankrupt_gap > H) | (g.bankrupt_gap < 0))]
     exit_rate = 1 - len(alive) / len(g)
     print(f"\n★ kill(2) 입력 — 보유기간 H={H}일 안에 퇴출 신호가 있는 결측 이벤트 비율: "
-          f"**{exit_rate:.1%}** ({len(g) - len(alive)}/{len(g)})")
+          f"{exit_rate:.1%} ({len(g) - len(alive)}/{len(g)})")
     print(f"  → 사전등록 임계 15% 대비 {'통과' if exit_rate <= 0.15 else '★KILL★'}")
     print(f"\n[완료] {OUT_TICKER.relative_to(ROOT)} · {OUT_EVENT.relative_to(ROOT)}")
 

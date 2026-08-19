@@ -1,0 +1,58 @@
+# lint·test·문서참조 세 검사. Makefile 타깃을 그대로 부른다 — 로컬과 CI가 갈리면
+# "내 머신에서는 통과한다"가 시작된다.
+#
+# UV 를 명령줄에서 덮는다. Makefile 은 `uv run` 을 기본값으로 두는데, CI 에서 그대로
+# 두면 재앙이다 — `uv run` 은 매번 환경을 락의 기본 그룹에 맞추는 동작이라
+# --only-group checks 로 21개만 깔아 둔 환경에 pyqlib·torch 를 포함한 175개를 되살린다.
+# --no-sync 가 그걸 막는다. 근거·실측은 docs/research/uv-adoption.md §9.2.
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 같은 브랜치에 새 푸시가 오면 진행 중인 실행을 버린다. 검사가 3분 안쪽이라
+# 큐를 쌓을 이유가 없다.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # setup-python 은 필요 없다 — uv 가 파이썬을 조달한다. 로컬은 .python-version
+      # (pyenv 3.10.13), CI 는 마이너까지만. 패치를 고정하면 그 패치가 내려갈 때 검사와
+      # 무관하게 깨진다. pyproject 의 requires-python = "==3.10.*" 가 양쪽을 다 받는다.
+      #
+      # ⚠️ 이 액션은 v8 부터 부동 major 태그를 만들지 않는다 — @v10 은 404다(실측).
+      # 정확한 버전으로 고정할 수밖에 없고, 그래서 올릴 때 손으로 올려야 한다.
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.12.5"
+          python-version: "3.10"
+          enable-cache: true
+
+      # --locked: 누가 pyproject.toml 만 고치고 uv lock 을 안 돌렸으면 여기서 멈춘다.
+      #   --frozen 은 낡은 락을 조용히 받아들이므로 검사의 목적이 사라진다.
+      # --only-group checks: 무거운 스택(pyqlib·torch)을 뺀다. linux 에서 기본 그룹을
+      #   깔면 torch 가 CUDA 스택 16개를 함께 끌어온다.
+      - name: 의존성 설치
+        run: uv sync --locked --only-group checks
+
+      - name: 주석·docstring 린트
+        run: make lint UV="uv run --no-sync"
+
+      - name: 테스트
+        run: make test UV="uv run --no-sync"
+
+      # 린터가 잡지 못하는 유일한 자동화 가능 항목. 주석 속 파일명은 산문이라
+      # 문서를 개명해도 따라오지 않는다 — 실제로 5곳이 끊긴 채 커밋돼 있었다.
+      - name: 문서 참조 해소
+        run: make check-docrefs

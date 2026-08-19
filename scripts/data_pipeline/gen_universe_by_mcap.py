@@ -10,7 +10,7 @@ USD 값이라 가격 조인이 불필요해 가격이 사라진 종목도 산출
 float은 내부자 지분을 뺀 값이라 시총보다 작으므로, 둘 다 있는 이벤트의 `float/시총` 중앙값으로
 환산한다. 종목별 지분율 편차가 커 오차가 크므로 산포도 함께 출력하고 `mcap_source`에 출처를 남긴다.
 
-실행:  .venv/bin/python scripts/data_pipeline/gen_universe_by_mcap.py
+실행:  uv run python scripts/data_pipeline/gen_universe_by_mcap.py
 옵션:  --max-mcap 3e8  --min-mcap 5e7   (기본: 마이크로캡 <$300M)
 """
 from __future__ import annotations
@@ -26,10 +26,10 @@ import warnings
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
-import pandas as pd
+import pandas as pd  # noqa: E402  (filterwarnings가 import 시점 경고를 먼저 막아야 한다)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV, EVENTS_MCAP_CSV, write_csv_atomic
+from _common import CANDIDATE_CLOSES_CSV, EVENTS_CSV, EVENTS_MCAP_CSV  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 EVENTS = EVENTS_CSV

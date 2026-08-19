@@ -8,7 +8,7 @@ yfinance 취약성 대응:
 auto_adjust=False 로 raw close와 adjclose를 함께 받는다(정규화에서 factor 계산에 필요).
 결측/거래정지일은 여기서 채우지 않는다(ffill 금지) — 정규화·dump 단계에서 NaN 유지.
 
-실행:  .venv/bin/python scripts/data_pipeline/01_collect.py
+실행:  uv run python scripts/data_pipeline/01_collect.py
 옵션:  --symbols AAPL MSFT (부분 수집)  --start 2015-01-01
 """
 from __future__ import annotations
@@ -18,7 +18,10 @@ import json
 import time
 from datetime import datetime, timezone
 
-from _common import write_csv_atomic, COLLECT_REPORT, DATA_RAW, START_DATE, log, read_universe
+from _common import (
+    COLLECT_REPORT, DATA_RAW, START_DATE, log, read_universe,
+    write_csv_atomic, write_text_atomic,
+)
 from collect import download_one, last_date_of
 
 def main() -> None:

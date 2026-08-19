@@ -6,8 +6,11 @@ load_config 등 부작용은 main 안에서만).
 from __future__ import annotations
 
 import importlib.util
+import json as _json
 from datetime import date, datetime
 from pathlib import Path
+
+import pytest
 
 _PATH = Path(__file__).resolve().parent.parent / "scripts" / "live" / "rebalance.py"
 _spec = importlib.util.spec_from_file_location("live_rebalance", _PATH)
@@ -30,10 +33,6 @@ def test_signal_age_days_future_is_zero():
 # 지금까지 이 파일은 _signal_age_days(날짜 산술) 하나만 봤다. dry-run과 실제 돈 사이의
 # 유일한 분기인 --confirm 게이트와 그 아래 조립부(config → broker → CircuitBreaker → runner)는
 # 통째로 미검증이었다. seam 리팩터가 Broker를 바꾸면 조립이 깨져도 아무 테스트가 울리지 않는다.
-
-import json as _json
-
-import pytest
 
 
 class _StubBroker:

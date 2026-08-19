@@ -21,7 +21,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import write_csv_atomic  # noqa: E402
+from _common import write_csv_atomic
 
 ROOT = Path(__file__).resolve().parents[2]
 DERA = ROOT / "data" / "dera"
@@ -52,8 +52,8 @@ def _load(q: str) -> tuple[pd.DataFrame, pd.DataFrame] | None:
     if "AFF10B5ONE" in m.columns:
         m = m[m.AFF10B5ONE != 1]
     # ⚠️ 소유자 테이블을 거래행에 조인하면 안 된다 — 공동 제출 시 거래행이 내부자 수만큼
-    # 복제되어 거래금액이 그 배수로 부풀고, 부풀림 계수가 곧 내부자 수라 **금액 하한이
-    # 복수 내부자 이벤트를 우선 통과시킨다**(클러스터 비율이 위로 편향된다).
+    # 복제되어 거래금액이 그 배수로 부풀고, 부풀림 계수가 곧 내부자 수라 금액 하한이
+    # 복수 내부자 이벤트를 우선 통과시킨다(클러스터 비율이 위로 편향된다).
     # → 금액은 거래행에서, 내부자 수는 (accession, 소유자) 쌍에서 따로 센다.
     pairs = own[own.ACCESSION_NUMBER.isin(set(m.ACCESSION_NUMBER))][
         ["ACCESSION_NUMBER", "RPTOWNERCIK"]].drop_duplicates()
@@ -111,10 +111,10 @@ def main() -> None:
         cum += v
         if k <= 4 or v / len(f) >= 0.01:
             print(f"  {k:>2}명: {v:>6} ({v / len(f):>5.1%})   누적 {cum / len(f):>5.1%}")
-    print(f"\n  ★ ≥2명: {(f.n_owner >= 2).sum():>6} (**{(f.n_owner >= 2).mean():.1%}**)  ← 클러스터 정의")
+    print(f"\n  ★ ≥2명: {(f.n_owner >= 2).sum():>6} ({(f.n_owner >= 2).mean():.1%})  ← 클러스터 정의")
     print(f"    ≥3명: {(f.n_owner >= 3).sum():>6} ({(f.n_owner >= 3).mean():.1%})  ← 검정력 미달 예상")
     print(f"\n  (참고) accession ≥2건: {(f.n_accession >= 2).sum():>6} "
-          f"({(f.n_accession >= 2).mean():.1%}) — **이 값으로 세면 안 된다**")
+          f"({(f.n_accession >= 2).mean():.1%}) — ⚠️ 이 값으로 세면 안 된다")
     print(f"\n[완료] {OUT.relative_to(ROOT)}")
 
 

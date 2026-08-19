@@ -5,7 +5,7 @@
 전제:  .env에 TOSS_ACCOUNT 설정 (계좌 헤더 필요할 수 있음)
 용도:  소수점 매수 실측(04_place_test_order.py) 전에 종목 자체가 US/거래가능인지 확인.
 """
-import _bootstrap  # noqa: F401
+import _bootstrap
 
 import json
 import sys

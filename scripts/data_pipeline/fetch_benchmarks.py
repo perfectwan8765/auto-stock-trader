@@ -3,7 +3,7 @@
 마이크로캡을 SPY에만 회귀하면 size premium이 통째로 alpha로 잡힌다(D9·D15).
 
 산출: data/benchmarks.csv (IWM·IWC·IJS·SPY) · data/ff_factors.csv (FF5 + MOM, 일별 소수)
-실행:  .venv/bin/python scripts/data_pipeline/fetch_benchmarks.py
+실행:  uv run python scripts/data_pipeline/fetch_benchmarks.py
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import pandas as pd
 import yfinance as yf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common import write_csv_atomic  # noqa: E402
+from _common import write_csv_atomic
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_BENCH = ROOT / "data" / "benchmarks.csv"
