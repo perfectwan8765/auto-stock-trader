@@ -231,10 +231,16 @@ qlib.init(provider_uri=<절대경로>, region=REG_US, kernels=1)   # ← 회피�
 ## Phase 1 — 개발 환경 구축 (M1 + pyenv)
 
 - `brew install libomp` (LightGBM OpenMP)
-- `pyenv install 3.10.14` → 프로젝트 폴더 `python -m venv .venv`
-- `pip install "numpy<2" "cython<3" "pandas<2.2"` 선행 → `pip install pyqlib` (실패 시 소스 `pip install -e .`)
+- `pyenv install 3.10.13` → `.python-version` 이 이 버전을 고정한다
 - **검증:** `python -c "import qlib, lightgbm, xgboost"` 성공
 - 커밋: `build: qlib 환경 구축 (M1+pyenv)`
+
+> **2026-08-19 갱신 — 의존성 관리가 uv 로 넘어갔다.** 위 절차는 `pip install` 로
+> 세 핀을 선행 설치하는 것이었으나, 지금 절차는 `brew install uv` → `uv sync` 다.
+> "설치 순서가 중요"했던 이유는 소스 빌드였는데 pyqlib 0.9.7 이 wheel 만 배포하므로
+> 그 제약이 사라졌고 `cython` 핀도 함께 제거됐다. 근거·이전 기록은
+> [`../research/uv-adoption.md`](../research/uv-adoption.md), 설치 절차는
+> [README](../../README.md) 를 본다.
 
 ## Phase 2 — 데이터 파이프라인 (S&P500 → Qlib bin)
 

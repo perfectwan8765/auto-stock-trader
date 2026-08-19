@@ -80,7 +80,7 @@ default-groups = ["checks"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"   # requirements.txt 기준 pyenv 3.10.13. 올릴 때 함께 고칠 것
+target-version = "py310"   # .python-version(pyenv 3.10.13) 기준. 올릴 때 함께 고칠 것
 extend-exclude = ["vendor", ".venv"]
 
 [tool.ruff.lint]
